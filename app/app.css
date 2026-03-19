@@ -37,7 +37,7 @@ html, body, #root {
 }
 
 /* Inner content stays at fixed width — text never reflows */
-.folder-sidebar > :not(.sidebar-collapse) {
+.folder-sidebar > :not(.sidebar-header) {
   width: 240px;
 }
 
@@ -45,16 +45,17 @@ html, body, #root {
   border-right-color: transparent;
 }
 
-/* Make room for collapse button in title row */
-.folder-sidebar .sono-tree-title {
-  padding-right: 36px;
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 32px;
+  padding: 4px 8px;
+  width: 240px;
+  box-sizing: border-box;
 }
 
 .sidebar-collapse {
-  position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 1;
   background: none;
   border: none;
   color: inherit;
@@ -80,17 +81,47 @@ html, body, #root {
 }
 
 .folder-header {
-  padding: 8px 16px;
+  position: relative;
+  padding: 4px 16px;
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   flex-shrink: 0;
+  min-height: 32px;
 }
 
 .folder-header h1 {
   font-size: 14px;
   font-weight: 500;
   opacity: 0.8;
+}
+
+.breadcrumb {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 12.5px;
+  color: var(--editor-fg, #e8e6e3);
+  opacity: 0.4;
+  white-space: nowrap;
+}
+
+.breadcrumb-link {
+  pointer-events: auto;
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+
+.breadcrumb-link:hover {
+  opacity: 1;
+  background: rgba(128, 128, 128, 0.15);
+}
+
+.breadcrumb-sep {
+  margin: 0 5px;
 }
 
 .header-spacer {
@@ -119,6 +150,10 @@ html, body, #root {
 .editor-wrap {
   flex: 1;
   min-height: 0;
+}
+
+.editor-wrap .md-preview {
+  padding-top: 8px;
 }
 
 .loading, .error, .home {

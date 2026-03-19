@@ -49,7 +49,11 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activePath, setActivePath] = useState<string | null>(initialFile || null)
-  const [theme, setTheme] = useState<"dark" | "light">("dark")
+  const [theme, setTheme] = useState<"dark" | "light">(() => {
+    const stored = localStorage.getItem("blurb-theme")
+    if (stored === "dark" || stored === "light") return stored
+    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark"
+  })
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 640)
   const [copied, setCopied] = useState(false)
 
@@ -72,8 +76,9 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
     window.history.replaceState(null, "", `/~/public/${slug}/${path}`)
   }, [slug])
 
-  // Sync page background with theme
+  // Persist theme choice and sync CSS variables
   useEffect(() => {
+    localStorage.setItem("blurb-theme", theme)
     const root = document.documentElement
     if (theme === "dark") {
       root.style.setProperty("--editor-bg", "#1a1816")
@@ -90,12 +95,50 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
     root.style.color = root.style.getPropertyValue("--editor-fg")
   }, [theme])
 
+  // Listen for OS theme changes (only applies when no explicit choice stored)
+  useEffect(() => {
+    const mq = window.matchMedia("(prefers-color-scheme: light)")
+    const handler = (e: MediaQueryListEvent) => {
+      if (!localStorage.getItem("blurb-theme")) {
+        setTheme(e.matches ? "light" : "dark")
+      }
+    }
+    mq.addEventListener("change", handler)
+    return () => mq.removeEventListener("change", handler)
+  }, [])
+
   if (loading) return <div className="loading">Loading...</div>
   if (error || !folder) return <div className="error">{error || "Not found"}</div>
 
   const file = folder.files.find(f => f.path === activePath)
   const treeFiles: TreeFile[] = folder.files.map(f => ({ id: f.id, path: f.path }))
   const showSidebar = folder.files.length > 1
+
+  // Breadcrumb: ~/public/{slug}/{filePath}
+  // Each segment has a label and optional nav target (path to navigate to)
+  // ~ and public are inert; slug navigates to first file; path segments navigate into dirs
+  const breadcrumb = (() => {
+    if (!activePath) return null
+    const pathParts = activePath.split("/")
+    // Build full segments with nav targets
+    const all: { label: string; nav?: string }[] = [
+      { label: "~" },
+      { label: "public" },
+      { label: slug, nav: folder.files[0]?.path },
+    ]
+    // Add directory segments — clicking navigates to first file under that prefix
+    for (let i = 0; i < pathParts.length - 1; i++) {
+      const prefix = pathParts.slice(0, i + 1).join("/") + "/"
+      const first = folder.files.find(f => f.path.startsWith(prefix))
+      all.push({ label: pathParts[i], nav: first?.path })
+    }
+    // Add the filename (current file — no nav needed)
+    all.push({ label: pathParts[pathParts.length - 1] })
+
+    // Collapse middle to "…" if longer than 4 segments
+    if (all.length <= 4) return all
+    return [all[0], { label: "…" }, all[all.length - 2], all[all.length - 1]]
+  })()
 
   const handleFileSelect = (tf: TreeFile) => {
     navigate(tf.path)
@@ -158,11 +201,13 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
         <>
           <div className={`sidebar-backdrop ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
           <div className={`folder-sidebar ${sidebarOpen ? "open" : ""}`}>
-            <button className="sidebar-collapse" onClick={() => setSidebarOpen(false)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 8H4M4 8l4-4M4 8l4 4" />
-              </svg>
-            </button>
+            <div className="sidebar-header">
+              <button className="sidebar-collapse" onClick={() => setSidebarOpen(false)}>
+                <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 8H4M4 8l4-4M4 8l4 4" />
+                </svg>
+              </button>
+            </div>
             <FileTree
               files={treeFiles}
               activePath={activePath}
@@ -182,7 +227,20 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               </svg>
             </button>
           )}
-          {!showSidebar && <h1>{folder.title}</h1>}
+          {breadcrumb && (
+            <nav className="breadcrumb">
+              {breadcrumb.map((seg, i) => (
+                <span key={i}>
+                  {i > 0 && <span className="breadcrumb-sep">/</span>}
+                  {seg.nav ? (
+                    <a className="breadcrumb-link" onClick={() => navigate(seg.nav!)}>{seg.label}</a>
+                  ) : (
+                    <span>{seg.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
+          )}
           <div className="header-spacer" />
           {file && (
             <button

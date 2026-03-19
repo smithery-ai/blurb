@@ -6,6 +6,27 @@
   <title>Sono</title>
 </head>
 <body>
+  <script>
+    // Apply theme before first paint to prevent flash
+    (function() {
+      var t = localStorage.getItem('blurb-theme');
+      if (!t) t = window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+      var d = document.documentElement;
+      if (t === 'light') {
+        d.style.setProperty('--editor-bg', '#faf8f5');
+        d.style.setProperty('--editor-fg', '#2a2520');
+        d.style.setProperty('--widget-border', '#d8d0c8');
+        d.style.setProperty('--sidebar-bg', '#faf8f5');
+      } else {
+        d.style.setProperty('--editor-bg', '#1a1816');
+        d.style.setProperty('--editor-fg', '#e8e6e3');
+        d.style.setProperty('--widget-border', '#3a3530');
+        d.style.setProperty('--sidebar-bg', '#1a1816');
+      }
+      d.style.background = d.style.getPropertyValue('--editor-bg');
+      d.style.color = d.style.getPropertyValue('--editor-fg');
+    })();
+  </script>
   <div id="root"></div>
   <script type="module" src="./main.tsx"></script>
 </body>
