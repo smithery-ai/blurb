@@ -48,14 +48,13 @@ html, body, #root {
 .sidebar-header {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   min-height: 32px;
   padding: 4px 8px;
   width: 240px;
   box-sizing: border-box;
 }
 
-.sidebar-collapse {
+.sidebar-action {
   background: none;
   border: none;
   color: inherit;
@@ -69,7 +68,7 @@ html, body, #root {
   transition: opacity 0.12s ease, background 0.12s ease;
 }
 
-.sidebar-collapse:hover {
+.sidebar-action:hover {
   opacity: 1;
   background: rgba(128, 128, 128, 0.15);
 }

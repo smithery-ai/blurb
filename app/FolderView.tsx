@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { SonoEditor, FileTree } from "sono-editor"
+import { SonoEditor, FileTree, useFileTreeStore } from "sono-editor"
 import type { Anchor, Comment, TreeFile } from "sono-editor"
 import { fetchFolder, postComment, deleteComment, postReply } from "./api"
 
@@ -202,7 +202,13 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
           <div className={`sidebar-backdrop ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
           <div className={`folder-sidebar ${sidebarOpen ? "open" : ""}`}>
             <div className="sidebar-header">
-              <button className="sidebar-collapse" onClick={() => setSidebarOpen(false)}>
+              <div className="header-spacer" />
+              <button className="sidebar-action" onClick={() => useFileTreeStore.getState().collapseAll()} title="Collapse all folders">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="m7 20 5-5 5 5" /><path d="m7 4 5 5 5-5" />
+                </svg>
+              </button>
+              <button className="sidebar-action" onClick={() => setSidebarOpen(false)} title="Collapse sidebar">
                 <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M12 8H4M4 8l4-4M4 8l4 4" />
                 </svg>
