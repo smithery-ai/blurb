@@ -31,13 +31,27 @@ const MoonIcon = () => (
   </svg>
 )
 
+const CopyIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect width="14" height="14" x="8" y="8" rx="2" ry="2" />
+    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2" />
+  </svg>
+)
+
+const CheckIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20 6L9 17l-5-5" />
+  </svg>
+)
+
 export default function TaskView({ slug, initialFile }: { slug: string; initialFile?: string }) {
   const [task, setTask] = useState<Task | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activePath, setActivePath] = useState<string | null>(initialFile || null)
   const [theme, setTheme] = useState<"dark" | "light">("dark")
-  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 640)
+  const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
     const data = await fetchTask(slug) as any
@@ -85,7 +99,7 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
 
   const handleFileSelect = (tf: TreeFile) => {
     navigate(tf.path)
-    setSidebarOpen(false)
+    if (window.innerWidth <= 640) setSidebarOpen(false)
   }
 
   const updateFileComments = (fileId: string, updater: (comments: Comment[]) => Comment[]) => {
@@ -140,11 +154,16 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
   }
 
   return (
-    <div className="task-view">
+    <div className={`task-view${!showSidebar ? " no-sidebar" : ""}${showSidebar && !sidebarOpen ? " sidebar-collapsed" : ""}`}>
       {showSidebar && (
         <>
           <div className={`sidebar-backdrop ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
           <div className={`task-sidebar ${sidebarOpen ? "open" : ""}`}>
+            <button className="sidebar-collapse" onClick={() => setSidebarOpen(false)}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M12 8H4M4 8l4-4M4 8l4 4" />
+              </svg>
+            </button>
             <FileTree
               files={treeFiles}
               activePath={activePath}
@@ -157,8 +176,8 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
       )}
       <div className="task-main">
         <header className="task-header">
-          {showSidebar && (
-            <button className="sidebar-toggle" onClick={() => setSidebarOpen(o => !o)} title="Toggle files">
+          {showSidebar && !sidebarOpen && (
+            <button className="sidebar-toggle" onClick={() => setSidebarOpen(true)}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
                 <path d="M2 4h12M2 8h12M2 12h12" />
               </svg>
@@ -166,10 +185,21 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
           )}
           {!showSidebar && <h1>{task.title}</h1>}
           <div className="header-spacer" />
+          {file && (
+            <button
+              className="theme-toggle"
+              onClick={() => {
+                navigator.clipboard.writeText(file.content)
+                setCopied(true)
+                setTimeout(() => setCopied(false), 1500)
+              }}
+            >
+              {copied ? <CheckIcon /> : <CopyIcon />}
+            </button>
+          )}
           <button
             className="theme-toggle"
             onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
-            title={theme === "dark" ? "Switch to Light Mode" : "Switch to Dark Mode"}
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
           </button>
