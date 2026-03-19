@@ -1,0 +1,19 @@
+{
+  "name": "sono-worker",
+  "main": "src/index.tsx",
+  "compatibility_date": "2025-03-18",
+  "assets": {
+    "directory": "dist",
+    "binding": "ASSETS",
+    "html_handling": "none",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "sono-worker-db",
+      "database_id": "1aeed64e-9fd8-4370-aac3-eeca95ee3e8c",
+      "migrations_dir": "migrations"
+    }
+  ]
+}
