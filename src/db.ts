@@ -32,64 +32,85 @@ export function validatePath(path: string): string | null {
 // ─── Folders ─────────────────────────────────────────────────
 
 export async function getFolder(db: DB, slug: string) {
-  const folder = await db.prepare("SELECT * FROM folders WHERE slug = ?").bind(slug).first()
-  if (!folder) return null
+  // Single query: JOIN folders → files → comments → replies
+  const rows = await db.prepare(`
+    SELECT
+      fo.id as folder_id, fo.slug, fo.title, fo.created_at as folder_created_at,
+      f.id as file_id, f.path, f.content, f.language, f.sort_order,
+      c.id as comment_id, c.anchor_json, c.body as comment_body, c.author as comment_author, c.created_at as comment_created_at,
+      r.id as reply_id, r.body as reply_body, r.author as reply_author, r.created_at as reply_created_at
+    FROM folders fo
+    LEFT JOIN files f ON f.folder_id = fo.id
+    LEFT JOIN comments c ON c.file_id = f.id
+    LEFT JOIN replies r ON r.comment_id = c.id
+    WHERE fo.slug = ?
+    ORDER BY f.sort_order, f.path, c.created_at, r.created_at
+  `).bind(slug).all()
 
-  const files = await db.prepare(
-    "SELECT * FROM files WHERE folder_id = ? ORDER BY sort_order, path"
-  ).bind(folder.id).all()
+  if (rows.results.length === 0) return null
+  const first = rows.results[0] as any
 
-  const fileIds = files.results.map((f: any) => f.id)
-  if (fileIds.length === 0) return { ...folder, files: [] }
+  // Denormalize the flat JOIN rows into nested structure
+  const filesMap = new Map<string, any>()
+  const commentsMap = new Map<string, any>()
 
-  // Fetch all comments for all files in this folder
-  const placeholders = fileIds.map(() => "?").join(",")
-  const comments = await db.prepare(
-    `SELECT * FROM comments WHERE file_id IN (${placeholders}) ORDER BY created_at`
-  ).bind(...fileIds).all()
+  for (const row of rows.results as any[]) {
+    if (!row.file_id) continue
 
-  // Fetch all replies for those comments
-  const commentIds = comments.results.map((c: any) => c.id)
-  let replies: any[] = []
-  if (commentIds.length > 0) {
-    const rPlaceholders = commentIds.map(() => "?").join(",")
-    const rResult = await db.prepare(
-      `SELECT * FROM replies WHERE comment_id IN (${rPlaceholders}) ORDER BY created_at`
-    ).bind(...commentIds).all()
-    replies = rResult.results
+    if (!filesMap.has(row.file_id)) {
+      filesMap.set(row.file_id, {
+        id: row.file_id,
+        path: row.path,
+        content: row.content,
+        language: row.language,
+        comments: [],
+        _commentIds: new Set(),
+      })
+    }
+
+    if (row.comment_id) {
+      const file = filesMap.get(row.file_id)!
+      if (!file._commentIds.has(row.comment_id)) {
+        file._commentIds.add(row.comment_id)
+        const comment = {
+          id: row.comment_id,
+          anchor: JSON.parse(row.anchor_json),
+          body: row.comment_body,
+          author: row.comment_author,
+          createdAt: row.comment_created_at,
+          replies: [] as any[],
+          _replyIds: new Set<string>(),
+        }
+        commentsMap.set(row.comment_id, comment)
+        file.comments.push(comment)
+      }
+
+      if (row.reply_id) {
+        const comment = commentsMap.get(row.comment_id)!
+        if (!comment._replyIds.has(row.reply_id)) {
+          comment._replyIds.add(row.reply_id)
+          comment.replies.push({
+            id: row.reply_id,
+            body: row.reply_body,
+            author: row.reply_author,
+            createdAt: row.reply_created_at,
+          })
+        }
+      }
+    }
   }
 
-  // Nest replies into comments, comments into files
-  const commentMap = comments.results.map((c: any) => ({
-    id: c.id,
-    anchor: JSON.parse(c.anchor_json),
-    body: c.body,
-    author: c.author,
-    createdAt: c.created_at,
-    replies: replies
-      .filter((r: any) => r.comment_id === c.id)
-      .map((r: any) => ({
-        id: r.id,
-        body: r.body,
-        author: r.author,
-        createdAt: r.created_at,
-      })),
-    _fileId: c.file_id,
-  }))
-
-  const enrichedFiles = files.results.map((f: any) => ({
-    id: f.id,
-    path: f.path,
-    content: f.content,
-    language: f.language,
-    comments: commentMap.filter((c: any) => c._fileId === f.id).map(({ _fileId, ...c }: any) => c),
+  // Clean up internal tracking fields
+  const enrichedFiles = [...filesMap.values()].map(({ _commentIds, ...f }) => ({
+    ...f,
+    comments: f.comments.map(({ _replyIds, ...c }: any) => c),
   }))
 
   return {
-    id: folder.id,
-    slug: folder.slug,
-    title: folder.title,
-    createdAt: folder.created_at,
+    id: first.folder_id,
+    slug: first.slug,
+    title: first.title,
+    createdAt: first.folder_created_at,
     files: enrichedFiles,
   }
 }

@@ -13,6 +13,25 @@ function serveSPA(c: any) {
   return c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
 }
 
+/** Serve SPA with folder data inlined to eliminate client-side JSON fetch */
+async function serveSPAWithData(c: any, data: object) {
+  const url = new URL(c.req.url)
+  const htmlRes = await c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
+  const html = await htmlRes.text()
+  // Inject data before closing </head> — available before React mounts
+  const json = JSON.stringify(data).replace(/</g, "\\u003c") // prevent XSS via </script>
+  const injected = html.replace(
+    "</head>",
+    `<script>window.__FOLDER_DATA__=${json}</script>\n</head>`,
+  )
+  return new Response(injected, {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, s-maxage=60, stale-while-revalidate=300",
+    },
+  })
+}
+
 // ─── Helper: parse @comments from path ─────────────────────
 
 function parseCommentPath(raw: string) {
@@ -55,9 +74,10 @@ app.get("/~/public/:slug", async (c) => {
   if (!folder) return c.json({ error: "Not found" }, 404)
 
   if (accept.includes("application/json")) {
+    c.header("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300")
     return c.json(folder)
   }
-  return serveSPA(c)
+  return serveSPAWithData(c, folder)
 })
 
 // ─── File + comment routes ──────────────────────────────────
@@ -82,16 +102,26 @@ app.get("/~/public/:slug/:path{.+}", async (c) => {
   const accept = c.req.header("accept") || ""
   const file = await db.getFileBySlugAndPath(c.env.DB, slug, path)
   if (!file) {
-    if (!accept.includes("application/json")) return serveSPA(c)
+    if (!accept.includes("application/json")) {
+      // Browser navigating to a file path — try to load full folder for SSR
+      const folder = await db.getFolder(c.env.DB, slug)
+      if (folder) return serveSPAWithData(c, folder)
+      return serveSPA(c)
+    }
     return c.json({ error: "Not found" }, 404)
   }
 
+  const cache = "public, s-maxage=60, stale-while-revalidate=300"
   if (accept.includes("text/markdown")) {
-    return new Response(file.content as string, { headers: { "Content-Type": "text/markdown" } })
+    return new Response(file.content as string, { headers: { "Content-Type": "text/markdown", "Cache-Control": cache } })
   }
   if (accept.includes("application/json")) {
+    c.header("Cache-Control", cache)
     return c.json(file)
   }
+  // Browser navigating directly to a file — inline full folder data
+  const folder = await db.getFolder(c.env.DB, slug)
+  if (folder) return serveSPAWithData(c, folder)
   return serveSPA(c)
 })
 

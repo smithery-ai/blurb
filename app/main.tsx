@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client"
 import FolderView from "./FolderView"
-import "sono-editor/styles"
+import "koen/styles"
 import "./app.css"
 
 function App() {

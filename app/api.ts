@@ -1,6 +1,12 @@
-import type { Anchor } from "sono-editor"
+import type { Anchor } from "koen"
 
 export async function fetchFolder(slug: string) {
+  // Use server-inlined data if available (eliminates JSON fetch round-trip)
+  const inlined = (window as any).__FOLDER_DATA__
+  if (inlined && inlined.slug === slug) {
+    delete (window as any).__FOLDER_DATA__ // consume once
+    return inlined
+  }
   const res = await fetch(`/~/public/${slug}`, {
     headers: { "Accept": "application/json" },
   })

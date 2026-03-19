@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from "react"
-import { SonoEditor, FileTree, useFileTreeStore } from "sono-editor"
-import type { Anchor, Comment, TreeFile } from "sono-editor"
+import { Editor, FileTree, useFileTreeStore, getDefaultWidgets } from "koen"
+import type { Anchor, Comment, TreeFile } from "koen"
+
+const widgets = getDefaultWidgets()
 import { fetchFolder, postComment, deleteComment, postReply } from "./api"
 
 interface FolderFile {
@@ -157,14 +159,24 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
     })
   }
 
-  const handleAddComment = async (anchor: Anchor, body: string) => {
+  const handleCreateComment = async (anchor: Anchor) => {
     if (!file) return
     const tempId = `temp-${Date.now()}`
     updateFileComments(file.id, comments => [
       ...comments,
-      { id: tempId, anchor, body, author: "You", createdAt: new Date().toISOString(), replies: [] },
+      { id: tempId, anchor, body: "", author: "You", createdAt: new Date().toISOString(), replies: [] },
     ])
-    postComment(slug, file.path, anchor, body)
+    postComment(slug, file.path, anchor, "")
+  }
+
+  const handleUpdateComment = async (commentId: string, body: string) => {
+    if (!file) return
+    const comment = file.comments.find(c => c.id === commentId)
+    if (!comment) return
+    updateFileComments(file.id, comments =>
+      comments.map(c => c.id === commentId ? { ...c, body } : c)
+    )
+    postComment(slug, file.path, comment.anchor, body)
   }
 
   const handleDeleteComment = async (commentId: string) => {
@@ -269,14 +281,16 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
         </header>
         <div className="editor-wrap">
           {file ? (
-            <SonoEditor
+            <Editor
               content={file.content}
               filename={file.path}
               comments={file.comments}
               readOnly={true}
               mode={/\.(md|mdx)$/i.test(file.path) ? "preview" : "source"}
               theme={theme}
-              onAddComment={handleAddComment}
+              widgets={widgets}
+              onCreateComment={handleCreateComment}
+              onUpdateComment={handleUpdateComment}
               onDeleteComment={handleDeleteComment}
               onAddReply={handleAddReply}
               onLinkClick={handleLinkClick}
