@@ -37,7 +37,7 @@ html, body, #root {
 }
 
 /* Inner content stays at fixed width — text never reflows */
-.task-sidebar > * {
+.task-sidebar > :not(.sidebar-collapse) {
   width: 240px;
 }
 
@@ -45,10 +45,15 @@ html, body, #root {
   border-right-color: transparent;
 }
 
+/* Make room for collapse button in title row */
+.task-sidebar .sono-tree-title {
+  padding-right: 36px;
+}
+
 .sidebar-collapse {
   position: absolute;
-  top: 6px;
-  right: 6px;
+  top: 8px;
+  right: 8px;
   z-index: 1;
   background: none;
   border: none;
