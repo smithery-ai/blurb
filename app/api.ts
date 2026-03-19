@@ -1,13 +1,15 @@
 import type { Anchor } from "sono-editor"
 
-export async function fetchTask(slug: string) {
-  const res = await fetch(`/api/tasks/${slug}`)
+export async function fetchFolder(slug: string) {
+  const res = await fetch(`/~/public/${slug}`, {
+    headers: { "Accept": "application/json" },
+  })
   if (!res.ok) return null
   return res.json()
 }
 
-export async function createTask(title: string, files: { path: string; content: string }[]) {
-  const res = await fetch("/api/tasks", {
+export async function createFolder(title: string, files: { path: string; content: string }[]) {
+  const res = await fetch("/~/public", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ title, files }),
@@ -15,24 +17,24 @@ export async function createTask(title: string, files: { path: string; content: 
   return res.json()
 }
 
-export async function postComment(fileId: string, anchor: Anchor, body: string, author?: string) {
-  const res = await fetch("/api/comments", {
+export async function postComment(slug: string, path: string, anchor: Anchor, body: string, author?: string) {
+  const res = await fetch(`/~/public/${slug}/${path}/@comments`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ fileId, anchor, body, author }),
+    body: JSON.stringify({ anchor, body, author }),
   })
   return res.json()
 }
 
-export async function deleteComment(commentId: string) {
-  await fetch(`/api/comments/${commentId}`, { method: "DELETE" })
+export async function deleteComment(slug: string, path: string, commentId: string) {
+  await fetch(`/~/public/${slug}/${path}/@comments/${commentId}`, { method: "DELETE" })
 }
 
-export async function postReply(commentId: string, body: string, author?: string) {
-  const res = await fetch("/api/replies", {
+export async function postReply(slug: string, path: string, commentId: string, body: string, author?: string) {
+  const res = await fetch(`/~/public/${slug}/${path}/@comments/${commentId}/replies`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ commentId, body, author }),
+    body: JSON.stringify({ body, author }),
   })
   return res.json()
 }

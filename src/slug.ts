@@ -6,17 +6,6 @@ const adjectives = [
   "slim","slow","soft","sour","sure","tall","thin","true","vast","warm",
 ]
 
-const verbs = [
-  "biting","blazing","breaking","calling","carving","casting","chasing",
-  "climbing","crafting","crossing","dancing","dashing","diving","drafting",
-  "drawing","drifting","falling","fishing","flying","forging","gliding",
-  "growing","hiding","hiking","hunting","jumping","landing","leading",
-  "leaping","lifting","making","moving","naming","pacing","passing",
-  "pulling","racing","reading","riding","rising","rowing","running",
-  "sailing","seeking","singing","sitting","sleeping","sliding","soaring",
-  "spinning",
-]
-
 const animals = [
   "ant","bat","bear","bee","bird","boar","bull","cat","cod","cow",
   "crab","crow","deer","dog","dove","duck","eagle","eel","elk","emu",
@@ -39,13 +28,14 @@ export async function anonName(ip: string): Promise<string> {
 }
 
 export function generateSlug(): string {
-  return `${pick(adjectives)}-${pick(verbs)}-${pick(animals)}`
+  const num = Math.floor(Math.random() * 10000)
+  return `${pick(adjectives)}-${pick(animals)}-${String(num).padStart(4, "0")}`
 }
 
 export async function uniqueSlug(db: D1Database): Promise<string> {
   for (let i = 0; i < 10; i++) {
     const slug = generateSlug()
-    const existing = await db.prepare("SELECT 1 FROM tasks WHERE slug = ?").bind(slug).first()
+    const existing = await db.prepare("SELECT 1 FROM folders WHERE slug = ?").bind(slug).first()
     if (!existing) return slug
   }
   // Fallback: append random digits

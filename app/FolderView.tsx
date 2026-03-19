@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback } from "react"
 import { SonoEditor, FileTree } from "sono-editor"
 import type { Anchor, Comment, TreeFile } from "sono-editor"
-import { fetchTask, postComment, deleteComment, postReply } from "./api"
+import { fetchFolder, postComment, deleteComment, postReply } from "./api"
 
-interface TaskFile {
+interface FolderFile {
   id: string
   path: string
   content: string
@@ -11,11 +11,11 @@ interface TaskFile {
   comments: Comment[]
 }
 
-interface Task {
+interface Folder {
   id: string
   slug: string
   title: string
-  files: TaskFile[]
+  files: FolderFile[]
 }
 
 const SunIcon = () => (
@@ -44,8 +44,8 @@ const CheckIcon = () => (
   </svg>
 )
 
-export default function TaskView({ slug, initialFile }: { slug: string; initialFile?: string }) {
-  const [task, setTask] = useState<Task | null>(null)
+export default function FolderView({ slug, initialFile }: { slug: string; initialFile?: string }) {
+  const [folder, setFolder] = useState<Folder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [activePath, setActivePath] = useState<string | null>(initialFile || null)
@@ -54,11 +54,11 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
   const [copied, setCopied] = useState(false)
 
   const load = useCallback(async () => {
-    const data = await fetchTask(slug) as any
+    const data = await fetchFolder(slug) as any
     if (!data || data.error) {
-      setError("Task not found")
+      setError("Folder not found")
     } else {
-      setTask(data)
+      setFolder(data)
       // Auto-select first file if none selected (functional update avoids stale closure)
       if (!activePath && data.files.length > 0) navigate(data.files[0].path)
     }
@@ -69,7 +69,7 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
 
   const navigate = useCallback((path: string) => {
     setActivePath(path)
-    window.history.replaceState(null, "", `/t/${slug}/${path}`)
+    window.history.replaceState(null, "", `/~/public/${slug}/${path}`)
   }, [slug])
 
   // Sync page background with theme
@@ -91,11 +91,11 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
   }, [theme])
 
   if (loading) return <div className="loading">Loading...</div>
-  if (error || !task) return <div className="error">{error || "Not found"}</div>
+  if (error || !folder) return <div className="error">{error || "Not found"}</div>
 
-  const file = task.files.find(f => f.path === activePath)
-  const treeFiles: TreeFile[] = task.files.map(f => ({ id: f.id, path: f.path }))
-  const showSidebar = task.files.length > 1
+  const file = folder.files.find(f => f.path === activePath)
+  const treeFiles: TreeFile[] = folder.files.map(f => ({ id: f.id, path: f.path }))
+  const showSidebar = folder.files.length > 1
 
   const handleFileSelect = (tf: TreeFile) => {
     navigate(tf.path)
@@ -103,7 +103,7 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
   }
 
   const updateFileComments = (fileId: string, updater: (comments: Comment[]) => Comment[]) => {
-    setTask(prev => {
+    setFolder(prev => {
       if (!prev) return prev
       return {
         ...prev,
@@ -121,13 +121,13 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
       ...comments,
       { id: tempId, anchor, body, author: "You", createdAt: new Date().toISOString(), replies: [] },
     ])
-    postComment(file.id, anchor, body)
+    postComment(slug, file.path, anchor, body)
   }
 
   const handleDeleteComment = async (commentId: string) => {
     if (!file) return
     updateFileComments(file.id, comments => comments.filter(c => c.id !== commentId))
-    deleteComment(commentId)
+    deleteComment(slug, file.path, commentId)
   }
 
   const handleAddReply = async (commentId: string, body: string) => {
@@ -140,25 +140,24 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
           : c
       )
     )
-    postReply(commentId, body)
+    postReply(slug, file.path, commentId, body)
   }
 
   const handleLinkClick = (href: string) => {
-    // Resolve relative path against current file's directory
     const dir = activePath?.includes("/") ? activePath.replace(/\/[^/]+$/, "/") : ""
     const resolved = dir + href
-    const match = task?.files.find(f => f.path === resolved || f.path === href)
+    const match = folder?.files.find(f => f.path === resolved || f.path === href)
     if (match) {
       navigate(match.path)
     }
   }
 
   return (
-    <div className={`task-view${!showSidebar ? " no-sidebar" : ""}${showSidebar && !sidebarOpen ? " sidebar-collapsed" : ""}`}>
+    <div className={`folder-view${!showSidebar ? " no-sidebar" : ""}${showSidebar && !sidebarOpen ? " sidebar-collapsed" : ""}`}>
       {showSidebar && (
         <>
           <div className={`sidebar-backdrop ${sidebarOpen ? "open" : ""}`} onClick={() => setSidebarOpen(false)} />
-          <div className={`task-sidebar ${sidebarOpen ? "open" : ""}`}>
+          <div className={`folder-sidebar ${sidebarOpen ? "open" : ""}`}>
             <button className="sidebar-collapse" onClick={() => setSidebarOpen(false)}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M12 8H4M4 8l4-4M4 8l4 4" />
@@ -167,15 +166,15 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
             <FileTree
               files={treeFiles}
               activePath={activePath}
-              title={task.title}
+              rootName={slug}
               theme={theme}
               onFileSelect={handleFileSelect}
             />
           </div>
         </>
       )}
-      <div className="task-main">
-        <header className="task-header">
+      <div className="folder-main">
+        <header className="folder-header">
           {showSidebar && !sidebarOpen && (
             <button className="sidebar-toggle" onClick={() => setSidebarOpen(true)}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
@@ -183,7 +182,7 @@ export default function TaskView({ slug, initialFile }: { slug: string; initialF
               </svg>
             </button>
           )}
-          {!showSidebar && <h1>{task.title}</h1>}
+          {!showSidebar && <h1>{folder.title}</h1>}
           <div className="header-spacer" />
           {file && (
             <button

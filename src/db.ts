@@ -29,20 +29,20 @@ export function validatePath(path: string): string | null {
   return null
 }
 
-// ─── Tasks ──────────────────────────────────────────────────
+// ─── Folders ─────────────────────────────────────────────────
 
-export async function getTask(db: DB, slug: string) {
-  const task = await db.prepare("SELECT * FROM tasks WHERE slug = ?").bind(slug).first()
-  if (!task) return null
+export async function getFolder(db: DB, slug: string) {
+  const folder = await db.prepare("SELECT * FROM folders WHERE slug = ?").bind(slug).first()
+  if (!folder) return null
 
   const files = await db.prepare(
-    "SELECT * FROM task_files WHERE task_id = ? ORDER BY sort_order, path"
-  ).bind(task.id).all()
+    "SELECT * FROM files WHERE folder_id = ? ORDER BY sort_order, path"
+  ).bind(folder.id).all()
 
   const fileIds = files.results.map((f: any) => f.id)
-  if (fileIds.length === 0) return { ...task, files: [] }
+  if (fileIds.length === 0) return { ...folder, files: [] }
 
-  // Fetch all comments for all files in this task
+  // Fetch all comments for all files in this folder
   const placeholders = fileIds.map(() => "?").join(",")
   const comments = await db.prepare(
     `SELECT * FROM comments WHERE file_id IN (${placeholders}) ORDER BY created_at`
@@ -86,43 +86,43 @@ export async function getTask(db: DB, slug: string) {
   }))
 
   return {
-    id: task.id,
-    slug: task.slug,
-    title: task.title,
-    createdAt: task.created_at,
+    id: folder.id,
+    slug: folder.slug,
+    title: folder.title,
+    createdAt: folder.created_at,
     files: enrichedFiles,
   }
 }
 
-export async function createTask(
+export async function createFolder(
   db: DB,
   slug: string,
   title: string,
   files: { path: string; content: string }[],
 ) {
-  const taskId = id()
+  const folderId = id()
 
   const stmts = [
-    db.prepare("INSERT INTO tasks (id, slug, title) VALUES (?, ?, ?)").bind(taskId, slug, title),
+    db.prepare("INSERT INTO folders (id, slug, title) VALUES (?, ?, ?)").bind(folderId, slug, title),
     ...files.map((f, i) =>
       db.prepare(
-        "INSERT INTO task_files (id, task_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
-      ).bind(id(), taskId, f.path, f.content, i)
+        "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
+      ).bind(id(), folderId, f.path, f.content, i)
     ),
   ]
 
   await db.batch(stmts)
 
-  return { id: taskId, slug }
+  return { id: folderId, slug }
 }
 
 // ─── File operations ────────────────────────────────────────
 
 export async function getFileBySlugAndPath(db: DB, slug: string, path: string) {
   const row = await db.prepare(
-    `SELECT tf.* FROM task_files tf
-     JOIN tasks t ON tf.task_id = t.id
-     WHERE t.slug = ? AND tf.path = ?`
+    `SELECT f.* FROM files f
+     JOIN folders fo ON f.folder_id = fo.id
+     WHERE fo.slug = ? AND f.path = ?`
   ).bind(slug, path).first()
   return row ? { id: row.id, path: row.path, content: row.content, language: row.language } : null
 }
@@ -130,23 +130,23 @@ export async function getFileBySlugAndPath(db: DB, slug: string, path: string) {
 export async function replaceFile(db: DB, slug: string, path: string, content: string) {
   const file = await getFileBySlugAndPath(db, slug, path)
   if (file) {
-    await db.prepare("UPDATE task_files SET content = ? WHERE id = ?").bind(content, file.id).run()
+    await db.prepare("UPDATE files SET content = ? WHERE id = ?").bind(content, file.id).run()
     return { id: file.id, path, created: false }
   }
 
   // Upsert: create new file if it doesn't exist
-  const task = await db.prepare("SELECT id FROM tasks WHERE slug = ?").bind(slug).first()
-  if (!task) return null
+  const folder = await db.prepare("SELECT id FROM folders WHERE slug = ?").bind(slug).first()
+  if (!folder) return null
 
   const last = await db.prepare(
-    "SELECT MAX(sort_order) as max_sort FROM task_files WHERE task_id = ?"
-  ).bind(task.id).first() as any
+    "SELECT MAX(sort_order) as max_sort FROM files WHERE folder_id = ?"
+  ).bind(folder.id).first() as any
   const sortOrder = (last?.max_sort ?? -1) + 1
 
   const fileId = id()
   await db.prepare(
-    "INSERT INTO task_files (id, task_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
-  ).bind(fileId, task.id, path, content, sortOrder).run()
+    "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
+  ).bind(fileId, folder.id, path, content, sortOrder).run()
   return { id: fileId, path, created: true }
 }
 
@@ -161,7 +161,7 @@ export async function deleteFile(db: DB, slug: string, path: string) {
     await db.prepare(`DELETE FROM replies WHERE comment_id IN (${ph})`).bind(...commentIds).run()
     await db.prepare(`DELETE FROM comments WHERE file_id = ?`).bind(file.id).run()
   }
-  await db.prepare("DELETE FROM task_files WHERE id = ?").bind(file.id).run()
+  await db.prepare("DELETE FROM files WHERE id = ?").bind(file.id).run()
   return { id: file.id, path, deleted: true }
 }
 
@@ -189,7 +189,7 @@ export async function patchFile(
   }
 
   if (applied.length > 0) {
-    await db.prepare("UPDATE task_files SET content = ? WHERE id = ?").bind(content, file.id).run()
+    await db.prepare("UPDATE files SET content = ? WHERE id = ?").bind(content, file.id).run()
   }
 
   return { id: file.id, path, applied: applied.length, failed: failed.length, failedMatches: failed }

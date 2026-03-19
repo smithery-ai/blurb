@@ -6,15 +6,32 @@ type Bindings = { DB: D1Database; ASSETS: Fetcher }
 
 const app = new Hono<{ Bindings: Bindings }>()
 
-// ─── API Routes ─────────────────────────────────────────────
+// ─── Helper: serve SPA ─────────────────────────────────────
 
-app.get("/api/tasks/:slug", async (c) => {
-  const task = await db.getTask(c.env.DB, c.req.param("slug"))
-  if (!task) return c.json({ error: "Not found" }, 404)
-  return c.json(task)
-})
+function serveSPA(c: any) {
+  const url = new URL(c.req.url)
+  return c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
+}
 
-app.post("/api/tasks", async (c) => {
+// ─── Helper: parse @comments from path ─────────────────────
+
+function parseCommentPath(raw: string) {
+  const idx = raw.indexOf("/@comments")
+  if (idx === -1) return null
+  const filePath = raw.slice(0, idx)
+  const rest = raw.slice(idx + "/@comments".length)
+  if (!rest || rest === "/") return { filePath, commentId: null, isReplies: false }
+  const parts = rest.replace(/^\//, "").split("/")
+  return {
+    filePath,
+    commentId: parts[0] || null,
+    isReplies: parts[1] === "replies",
+  }
+}
+
+// ─── Folder routes ──────────────────────────────────────────
+
+app.post("/~/public", async (c) => {
   const body = await c.req.json<{
     title?: string
     files: { path: string; content: string }[]
@@ -22,75 +39,63 @@ app.post("/api/tasks", async (c) => {
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
 
-  // Validate all paths
   for (const f of body.files) {
     const err = db.validatePath(f.path)
     if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
   }
 
   const slug = await uniqueSlug(c.env.DB)
-  const task = await db.createTask(c.env.DB, slug, body.title || "Untitled", body.files)
-  return c.json(task, 201)
+  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files)
+  return c.json(folder, 201)
 })
 
-app.get("/api/comments/:id", async (c) => {
-  const comment = await db.getComment(c.env.DB, c.req.param("id"))
-  if (!comment) return c.json({ error: "Not found" }, 404)
-  return c.json(comment)
+app.get("/~/public/:slug", async (c) => {
+  const accept = c.req.header("accept") || ""
+  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  if (accept.includes("application/json")) {
+    return c.json(folder)
+  }
+  return serveSPA(c)
 })
 
-app.get("/api/files/:fileId/comments", async (c) => {
-  const comments = await db.listComments(c.env.DB, c.req.param("fileId"))
-  return c.json(comments)
-})
+// ─── File + comment routes ──────────────────────────────────
 
-app.post("/api/comments", async (c) => {
-  const body = await c.req.json<{
-    fileId: string
-    anchor: object
-    body: string
-    author?: string
-  }>()
+app.get("/~/public/:slug/:path{.+}", async (c) => {
+  const slug = c.req.param("slug")
+  const path = c.req.param("path")
+  const comment = parseCommentPath(path)
 
-  if (!body.fileId || !body.anchor || !body.body) {
-    return c.json({ error: "fileId, anchor, and body are required" }, 400)
+  if (comment) {
+    if (comment.commentId) {
+      const result = await db.getComment(c.env.DB, comment.commentId)
+      if (!result) return c.json({ error: "Not found" }, 404)
+      return c.json(result)
+    }
+    const file = await db.getFileBySlugAndPath(c.env.DB, slug, comment.filePath)
+    if (!file) return c.json({ error: "File not found" }, 404)
+    const comments = await db.listComments(c.env.DB, file.id as string)
+    return c.json(comments)
   }
 
-  const author = body.author || await anonName(c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown")
-  const comment = await db.addComment(c.env.DB, body.fileId, body.anchor, body.body, author)
-  return c.json(comment, 201)
-})
-
-app.delete("/api/comments/:id", async (c) => {
-  await db.deleteComment(c.env.DB, c.req.param("id"))
-  return c.json({ ok: true })
-})
-
-app.post("/api/replies", async (c) => {
-  const body = await c.req.json<{
-    commentId: string
-    body: string
-    author?: string
-  }>()
-
-  if (!body.commentId || !body.body) {
-    return c.json({ error: "commentId and body are required" }, 400)
+  const accept = c.req.header("accept") || ""
+  const file = await db.getFileBySlugAndPath(c.env.DB, slug, path)
+  if (!file) {
+    if (!accept.includes("application/json")) return serveSPA(c)
+    return c.json({ error: "Not found" }, 404)
   }
 
-  const author = body.author || await anonName(c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown")
-  const reply = await db.addReply(c.env.DB, body.commentId, body.body, author)
-  return c.json(reply, 201)
+  if (accept.includes("text/markdown")) {
+    return new Response(file.content as string, { headers: { "Content-Type": "text/markdown" } })
+  }
+  if (accept.includes("application/json")) {
+    return c.json(file)
+  }
+  return serveSPA(c)
 })
 
-// ─── File operations ────────────────────────────────────────
-
-app.get("/api/tasks/:slug/files/:path{.+}", async (c) => {
-  const file = await db.getFileBySlugAndPath(c.env.DB, c.req.param("slug"), c.req.param("path"))
-  if (!file) return c.json({ error: "Not found" }, 404)
-  return c.json(file)
-})
-
-app.put("/api/tasks/:slug/files/:path{.+}", async (c) => {
+app.put("/~/public/:slug/:path{.+}", async (c) => {
   const body = await c.req.json<{ content: string }>()
   if (!body.content && body.content !== "") return c.json({ error: "content is required" }, 400)
 
@@ -99,11 +104,11 @@ app.put("/api/tasks/:slug/files/:path{.+}", async (c) => {
   if (pathErr) return c.json({ error: `Invalid path: ${pathErr}` }, 400)
 
   const result = await db.replaceFile(c.env.DB, c.req.param("slug"), path, body.content)
-  if (!result) return c.json({ error: "Task not found" }, 404)
+  if (!result) return c.json({ error: "Folder not found" }, 404)
   return c.json(result, result.created ? 201 : 200)
 })
 
-app.patch("/api/tasks/:slug/files/:path{.+}", async (c) => {
+app.patch("/~/public/:slug/:path{.+}", async (c) => {
   const body = await c.req.json<{ updates: { old_str: string; new_str: string }[] }>()
   if (!body.updates?.length) return c.json({ error: "updates array is required" }, 400)
 
@@ -113,13 +118,55 @@ app.patch("/api/tasks/:slug/files/:path{.+}", async (c) => {
   return c.json(result)
 })
 
-app.delete("/api/tasks/:slug/files/:path{.+}", async (c) => {
-  const result = await db.deleteFile(c.env.DB, c.req.param("slug"), c.req.param("path"))
+app.post("/~/public/:slug/:path{.+}", async (c) => {
+  const slug = c.req.param("slug")
+  const path = c.req.param("path")
+  const comment = parseCommentPath(path)
+  if (!comment) return c.json({ error: "Not found" }, 404)
+
+  const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"
+
+  if (comment.commentId && comment.isReplies) {
+    // POST ~/public/:slug/:path/@comments/:id/replies
+    const body = await c.req.json<{ body: string; author?: string }>()
+    if (!body.body) return c.json({ error: "body is required" }, 400)
+    const author = body.author || await anonName(ip)
+    const reply = await db.addReply(c.env.DB, comment.commentId, body.body, author)
+    return c.json(reply, 201)
+  }
+
+  if (!comment.commentId) {
+    // POST ~/public/:slug/:path/@comments
+    const body = await c.req.json<{ anchor: object; body: string; author?: string }>()
+    if (!body.anchor || !body.body) return c.json({ error: "anchor and body are required" }, 400)
+    const file = await db.getFileBySlugAndPath(c.env.DB, slug, comment.filePath)
+    if (!file) return c.json({ error: "File not found" }, 404)
+    const author = body.author || await anonName(ip)
+    const result = await db.addComment(c.env.DB, file.id as string, body.anchor, body.body, author)
+    return c.json(result, 201)
+  }
+
+  return c.json({ error: "Not found" }, 404)
+})
+
+app.delete("/~/public/:slug/:path{.+}", async (c) => {
+  const slug = c.req.param("slug")
+  const path = c.req.param("path")
+  const comment = parseCommentPath(path)
+
+  if (comment?.commentId) {
+    // DELETE ~/public/:slug/:path/@comments/:id
+    await db.deleteComment(c.env.DB, comment.commentId)
+    return c.json({ ok: true })
+  }
+
+  // DELETE file
+  const result = await db.deleteFile(c.env.DB, slug, path)
   if (!result) return c.json({ error: "Not found" }, 404)
   return c.json(result)
 })
 
-// ─── SPA fallback — serve index.html for non-API routes ─────
+// ─── SPA fallback ───────────────────────────────────────────
 
 app.get("*", async (c) => {
   const url = new URL(c.req.url)
