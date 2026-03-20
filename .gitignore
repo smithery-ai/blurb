@@ -5,3 +5,4 @@ dist/
 .debug/
 skills-lock.json
 .dev.vars
+.infisical.json
