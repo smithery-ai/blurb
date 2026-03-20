@@ -10,7 +10,7 @@ A blurb is a markdown document with rich visuals baked in. Charts, maps, timelin
 
 Built for agents.
 
-![blurb](blurb.png)
+<img src="blurb.png" width="400" />
 
 ## Quickstart
 
