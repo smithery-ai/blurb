@@ -1,7 +1,8 @@
-// Pure fern generation logic — shared between client (Fern.tsx) and server (og.svg endpoint)
+// Pure botanical generation logic — shared between client (Fern.tsx) and server (og.svg endpoint)
 // No React or DOM dependencies
 
 export type CellType = "stem" | "frond" | "tip"
+export type ShapeType = "fern" | "leaf" | "twig"
 
 export interface Cell {
   char: string
@@ -10,24 +11,82 @@ export interface Cell {
 
 const CHARS = ".,:;~=#%&@"
 
-const TRANSFORMS: [number, number, number, number, number, number, number][] = [
+// ─── IFS transforms: [a, b, c, d, e, f, probability] ────────
+
+type IFS = [number, number, number, number, number, number, number][]
+
+const FERN_IFS: IFS = [
   [0.00, 0.00, 0.00, 0.16, 0.00, 0.00, 0.01],
   [0.85, 0.04, -0.04, 0.85, 0.00, 1.60, 0.85],
   [0.20, -0.26, 0.23, 0.22, 0.00, 1.60, 0.07],
   [-0.15, 0.28, 0.26, 0.24, 0.00, 0.44, 0.07],
 ]
 
-export const COLORS: Record<string, Record<CellType, string[]>> = {
-  dark: {
-    stem:  ["#7B6345", "#8B7355", "#6B5335"],
-    frond: ["#4a7a3a", "#5a8a4a", "#3a6a2a", "#6a9a5a"],
-    tip:   ["#7aaa6a", "#8aba7a", "#6a9a5a", "#9aca8a"],
+const LEAF_IFS: IFS = [
+  [0.14, 0.01, 0.00, 0.51, -0.08, -1.31, 0.10],
+  [0.43, 0.52, -0.45, 0.50, 1.49, -0.75, 0.35],
+  [0.45, -0.49, 0.47, 0.47, -1.62, -0.74, 0.35],
+  [0.49, 0.00, 0.00, 0.51, 0.02, 1.62, 0.20],
+]
+
+// ─── Per-shape color palettes ────────────────────────────────
+
+const SHAPE_COLORS: Record<ShapeType, Record<string, Record<CellType, string[]>>> = {
+  fern: {
+    dark: {
+      stem:  ["#7B6345", "#8B7355", "#6B5335"],
+      frond: ["#4a7a3a", "#5a8a4a", "#3a6a2a", "#6a9a5a"],
+      tip:   ["#7aaa6a", "#8aba7a", "#6a9a5a", "#9aca8a"],
+    },
+    light: {
+      stem:  ["#4a3315", "#3a2305", "#5a4325"],
+      frond: ["#1a5a0a", "#2a6a1a", "#0a4a00", "#1a5510"],
+      tip:   ["#2a7a1a", "#3a8a2a", "#1a6a0a", "#2a7520"],
+    },
   },
-  light: {
-    stem:  ["#4a3315", "#3a2305", "#5a4325"],
-    frond: ["#1a5a0a", "#2a6a1a", "#0a4a00", "#1a5510"],
-    tip:   ["#2a7a1a", "#3a8a2a", "#1a6a0a", "#2a7520"],
+  leaf: {
+    dark: {
+      stem:  ["#8B6914", "#9B7924", "#7B5904"],
+      frond: ["#6a8a2a", "#7a9a3a", "#5a7a1a", "#8aaa4a"],
+      tip:   ["#aaba5a", "#baca6a", "#9aaa4a", "#cada7a"],
+    },
+    light: {
+      stem:  ["#5a4010", "#4a3000", "#6a5020"],
+      frond: ["#3a6a00", "#4a7a10", "#2a5a00", "#4a7510"],
+      tip:   ["#5a8a10", "#6a9a20", "#4a7a00", "#5a8520"],
+    },
   },
+  twig: {
+    dark: {
+      stem:  ["#8B7355", "#9B8365", "#7B6345"],
+      frond: ["#7a6a5a", "#8a7a6a", "#6a5a4a", "#9a8a7a"],
+      tip:   ["#aa9a8a", "#baaa9a", "#9a8a7a", "#cabaaa"],
+    },
+    light: {
+      stem:  ["#3a2510", "#2a1500", "#4a3520"],
+      frond: ["#5a4a3a", "#6a5a4a", "#4a3a2a", "#5a4530"],
+      tip:   ["#7a6a5a", "#8a7a6a", "#6a5a4a", "#7a6550"],
+    },
+  },
+}
+
+// SVG/OG dot colors per shape
+const SVG_DOT_COLORS: Record<ShapeType, { base: number; range: number; r: (v: number) => number; g: (v: number) => number; b: (v: number) => number }> = {
+  fern:   { base: 80, range: 120, r: () => 50, g: v => v, b: () => 35 },
+  leaf:   { base: 80, range: 120, r: v => Math.round(v * 0.5), g: v => v, b: () => 20 },
+  twig:   { base: 60, range: 100, r: v => v, g: v => Math.round(v * 0.8), b: v => Math.round(v * 0.5) },
+}
+
+// Legacy export — picks colors based on shape
+export const COLORS: Record<string, Record<CellType, string[]>> = SHAPE_COLORS.fern
+
+export function getShapeColors(shape: ShapeType): Record<string, Record<CellType, string[]>> {
+  return SHAPE_COLORS[shape]
+}
+
+export function pickShape(seed: number): ShapeType {
+  const shapes: ShapeType[] = ["fern", "leaf", "twig"]
+  return shapes[((seed >>> 0) % shapes.length)]
 }
 
 function mulberry32(seed: number) {
@@ -59,7 +118,128 @@ interface Frond {
   iters: number
 }
 
+// ─── Shape point generators ─────────────────────────────────
+
+function generateFernPoints(rng: () => number, rand: (min: number, max: number) => number): [number, number][] {
+  const numFronds = Math.floor(rand(3, 5))
+  const fronds: Frond[] = []
+  for (let i = 0; i < numFronds; i++) {
+    const baseAngle = -0.8 + (i / (numFronds - 1)) * 1.6
+    fronds.push({
+      angle: baseAngle + rand(-0.1, 0.1),
+      scale: rand(0.6, 1.0),
+      ox: rand(-0.2, 0.2),
+      oy: rand(-0.1, 0.1),
+      iters: Math.floor(25000 * rand(0.6, 1.0)) + 15000,
+    })
+  }
+  fronds.sort((a, b) => a.scale - b.scale)
+
+  const points: [number, number][] = []
+  for (const frond of fronds) {
+    let x = 0, y = 0
+    const cos = Math.cos(frond.angle), sin = Math.sin(frond.angle)
+    for (let i = 0; i < frond.iters; i++) {
+      const r = rng()
+      let cumP = 0, t = FERN_IFS[0]
+      for (const tr of FERN_IFS) { cumP += tr[6]; if (r <= cumP) { t = tr; break } }
+      const nx = t[0] * x + t[1] * y + t[4]
+      const ny = t[2] * x + t[3] * y + t[5]
+      x = nx; y = ny
+      if (i > 20) {
+        const sx = x * frond.scale, sy = y * frond.scale
+        points.push([sx * cos - sy * sin + frond.ox, sx * sin + sy * cos + frond.oy])
+      }
+    }
+  }
+  return points
+}
+
+function generateLeafPoints(rng: () => number, rand: (min: number, max: number) => number): [number, number][] {
+  const points: [number, number][] = []
+  const iters = Math.floor(rand(60000, 80000))
+  // Single leaf with slight random rotation
+  const angle = rand(-0.15, 0.15)
+  const cos = Math.cos(angle), sin = Math.sin(angle)
+  let x = 0, y = 0
+  for (let i = 0; i < iters; i++) {
+    const r = rng()
+    let cumP = 0, t = LEAF_IFS[0]
+    for (const tr of LEAF_IFS) { cumP += tr[6]; if (r <= cumP) { t = tr; break } }
+    const nx = t[0] * x + t[1] * y + t[4]
+    const ny = t[2] * x + t[3] * y + t[5]
+    x = nx; y = ny
+    if (i > 20) {
+      points.push([x * cos - y * sin, x * sin + y * cos])
+    }
+  }
+  return points
+}
+
+function generateTwigPoints(rng: () => number, rand: (min: number, max: number) => number): [number, number][] {
+  const points: [number, number][] = []
+
+  function branch(x: number, y: number, angle: number, len: number, width: number, depth: number) {
+    if (depth <= 0 || len < 0.05) return
+    const steps = Math.floor(len * 200)
+    const endX = x + Math.cos(angle) * len
+    const endY = y + Math.sin(angle) * len
+    // Draw the branch with thickness
+    for (let i = 0; i < steps; i++) {
+      const t = i / steps
+      const px = x + (endX - x) * t
+      const py = y + (endY - y) * t
+      const w = width * (1 - t * 0.5)
+      for (let j = 0; j < Math.ceil(w * 8); j++) {
+        const off = rand(-w, w) * 0.3
+        const perpX = -Math.sin(angle) * off
+        const perpY = Math.cos(angle) * off
+        points.push([px + perpX, py + perpY])
+      }
+    }
+
+    // Sub-branches
+    const numSub = Math.floor(rand(2, 4))
+    for (let i = 0; i < numSub; i++) {
+      const t = rand(0.3, 0.9)
+      const bx = x + (endX - x) * t
+      const by = y + (endY - y) * t
+      const spread = rand(0.3, 0.9) * (rng() > 0.5 ? 1 : -1)
+      const childLen = len * rand(0.4, 0.7)
+      branch(bx, by, angle + spread, childLen, width * 0.6, depth - 1)
+    }
+
+    // Leaf clusters at tips
+    if (depth <= 2) {
+      for (let i = 0; i < 80; i++) {
+        const lr = rand(0, 0.4)
+        const la = rand(0, Math.PI * 2)
+        points.push([endX + lr * Math.cos(la), endY + lr * Math.sin(la)])
+      }
+    }
+  }
+
+  const numBranches = Math.floor(rand(2, 4))
+  for (let i = 0; i < numBranches; i++) {
+    const baseAngle = Math.PI / 2 + rand(-0.4, 0.4)
+    const ox = rand(-0.5, 0.5)
+    branch(ox, 0, baseAngle, rand(2.5, 4), rand(0.1, 0.2), Math.floor(rand(3, 5)))
+  }
+
+  return points
+}
+
+function generateShapePoints(shape: ShapeType, rng: () => number, rand: (min: number, max: number) => number): [number, number][] {
+  switch (shape) {
+    case "fern": return generateFernPoints(rng, rand)
+    case "leaf": return generateLeafPoints(rng, rand)
+
+    case "twig": return generateTwigPoints(rng, rand)
+  }
+}
+
 export function generateGarden(cols: number, rows: number, seed: number): Cell[][] {
+  const shape = pickShape(seed)
   const rng = mulberry32(seed)
   const rand = makeRand(rng)
 
@@ -70,51 +250,7 @@ export function generateGarden(cols: number, rows: number, seed: number): Cell[]
     Array.from({ length: cols }, () => 0)
   )
 
-  const numFronds = Math.floor(rand(3, 5))
-  const fronds: Frond[] = []
-
-  for (let i = 0; i < numFronds; i++) {
-    const baseAngle = -0.8 + (i / (numFronds - 1)) * 1.6
-    const angle = baseAngle + rand(-0.1, 0.1)
-    const scale = rand(0.6, 1.0)
-    const ox = rand(-0.2, 0.2)
-    const oy = rand(-0.1, 0.1)
-    const iters = Math.floor(25000 * scale) + 15000
-    fronds.push({ angle, scale, ox, oy, iters })
-  }
-
-  fronds.sort((a, b) => a.scale - b.scale)
-
-  const allPoints: [number, number][] = []
-
-  for (const frond of fronds) {
-    let x = 0, y = 0
-    const cos = Math.cos(frond.angle)
-    const sin = Math.sin(frond.angle)
-
-    for (let i = 0; i < frond.iters; i++) {
-      const r = rng()
-      let cumP = 0
-      let t = TRANSFORMS[0]
-      for (const tr of TRANSFORMS) {
-        cumP += tr[6]
-        if (r <= cumP) { t = tr; break }
-      }
-
-      const nx = t[0] * x + t[1] * y + t[4]
-      const ny = t[2] * x + t[3] * y + t[5]
-      x = nx
-      y = ny
-
-      if (i > 20) {
-        const sx = x * frond.scale
-        const sy = y * frond.scale
-        const rx = sx * cos - sy * sin + frond.ox
-        const ry = sx * sin + sy * cos + frond.oy
-        allPoints.push([rx, ry])
-      }
-    }
-  }
+  const allPoints = generateShapePoints(shape, rng, rand)
 
   let minX = Infinity, maxX = -Infinity
   let minY = Infinity, maxY = -Infinity
@@ -180,7 +316,7 @@ export function generateGarden(cols: number, rows: number, seed: number): Cell[]
   )
 }
 
-// Render a fern as clean pixel dots in SVG (for OG images)
+// Render as clean pixel dots in SVG (for OG images)
 export function renderFernSVG(opts: {
   seed: number
   title?: string
@@ -190,40 +326,11 @@ export function renderFernSVG(opts: {
 }): string {
   const width = opts.width ?? 1200
   const height = opts.height ?? 630
+  const shape = pickShape(opts.seed)
   const rng = mulberry32(opts.seed)
   const rand = makeRand(rng)
 
-  // Generate fern fronds
-  const numFronds = Math.floor(rand(3, 5))
-  const fronds: Frond[] = []
-  for (let i = 0; i < numFronds; i++) {
-    const baseAngle = -0.8 + (i / (numFronds - 1)) * 1.6
-    fronds.push({
-      angle: baseAngle + rand(-0.1, 0.1),
-      scale: rand(0.6, 1.0),
-      ox: rand(-0.2, 0.2),
-      oy: rand(-0.1, 0.1),
-      iters: Math.floor(25000 * rand(0.6, 1.0)) + 10000,
-    })
-  }
-
-  const allPoints: [number, number][] = []
-  for (const frond of fronds) {
-    let x = 0, y = 0
-    const cos = Math.cos(frond.angle), sin = Math.sin(frond.angle)
-    for (let i = 0; i < frond.iters; i++) {
-      const r = rng()
-      let cumP = 0, t = TRANSFORMS[0]
-      for (const tr of TRANSFORMS) { cumP += tr[6]; if (r <= cumP) { t = tr; break } }
-      const nx = t[0] * x + t[1] * y + t[4]
-      const ny = t[2] * x + t[3] * y + t[5]
-      x = nx; y = ny
-      if (i > 20) {
-        const sx = x * frond.scale, sy = y * frond.scale
-        allPoints.push([sx * cos - sy * sin + frond.ox, sx * sin + sy * cos + frond.oy])
-      }
-    }
-  }
+  const allPoints = generateShapePoints(shape, rng, rand)
 
   // Find bounds
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
@@ -254,16 +361,17 @@ export function renderFernSVG(opts: {
     }
   }
 
-  // Build dot rects
+  // Build dot rects — color based on shape
+  const svgColor = SVG_DOT_COLORS[shape]
   const dots: string[] = []
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
       if (density[r][c] === 0) continue
       const norm = Math.sqrt(density[r][c] / maxD)
-      const green = Math.round(80 + norm * 120)
+      const channel = Math.round(svgColor.base + norm * svgColor.range)
       const opacity = (0.3 + norm * 0.7).toFixed(2)
       const gap = 2
-      dots.push(`<rect x="${c * cellSize}" y="${r * cellSize}" width="${cellSize - gap}" height="${cellSize - gap}" rx="1" fill="rgb(50,${green},35)" opacity="${opacity}"/>`)
+      dots.push(`<rect x="${c * cellSize}" y="${r * cellSize}" width="${cellSize - gap}" height="${cellSize - gap}" rx="1" fill="rgb(${svgColor.r(channel)},${svgColor.g(channel)},${svgColor.b(channel)})" opacity="${opacity}"/>`)
     }
   }
 
@@ -294,42 +402,14 @@ ${titleEls.join("\n")}
 </svg>`
 }
 
-// Generate fern as positioned dots for OG PNG rendering (via workers-og)
+// Generate as positioned dots for OG PNG rendering (via workers-og)
 export function generateOgDots(seed: number): { x: number; y: number; s: number; g: number; o: number }[] {
+  const shape = pickShape(seed)
   const rng = mulberry32(seed)
   const rand = makeRand(rng)
   const W = 1200, H = 630
 
-  const numFronds = Math.floor(rand(3, 5))
-  const fronds: Frond[] = []
-  for (let i = 0; i < numFronds; i++) {
-    const baseAngle = -0.8 + (i / (numFronds - 1)) * 1.6
-    fronds.push({
-      angle: baseAngle + rand(-0.1, 0.1),
-      scale: rand(0.6, 1.0),
-      ox: rand(-0.2, 0.2),
-      oy: rand(-0.1, 0.1),
-      iters: Math.floor(25000 * rand(0.6, 1.0)) + 10000,
-    })
-  }
-
-  const allPoints: [number, number][] = []
-  for (const frond of fronds) {
-    let x = 0, y = 0
-    const cos = Math.cos(frond.angle), sin = Math.sin(frond.angle)
-    for (let i = 0; i < frond.iters; i++) {
-      const r = rng()
-      let cumP = 0, t = TRANSFORMS[0]
-      for (const tr of TRANSFORMS) { cumP += tr[6]; if (r <= cumP) { t = tr; break } }
-      const nx = t[0] * x + t[1] * y + t[4]
-      const ny = t[2] * x + t[3] * y + t[5]
-      x = nx; y = ny
-      if (i > 20) {
-        const sx = x * frond.scale, sy = y * frond.scale
-        allPoints.push([sx * cos - sy * sin + frond.ox, sx * sin + sy * cos + frond.oy])
-      }
-    }
-  }
+  const allPoints = generateShapePoints(shape, rng, rand)
 
   let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity
   for (const [px, py] of allPoints) {

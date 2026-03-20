@@ -1,11 +1,11 @@
 import { useMemo, useRef, useState, useCallback } from "react"
-import { generateGarden, COLORS } from "../lib/fern-core"
+import { generateGarden, getShapeColors, pickShape } from "../lib/fern-core"
 
 export { hashStr } from "../lib/fern-core"
 
 export default function Fern({ theme, seed = 0, title, description, command }: { theme: "dark" | "light"; seed?: number; title?: string; description?: string; command?: string }) {
   const grid = useMemo(() => generateGarden(120, 55, seed), [seed])
-  const colors = COLORS[theme]
+  const colors = getShapeColors(pickShape(seed))[theme]
   const preRef = useRef<HTMLPreElement>(null)
   const [mouse, setMouse] = useState<{ col: number; row: number } | null>(null)
   const [copied, setCopied] = useState(false)

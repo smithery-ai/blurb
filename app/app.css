@@ -217,7 +217,7 @@ html, body, #root {
   text-align: left;
   max-width: 280px;
   align-self: flex-start;
-  margin-top: 15vh;
+  margin-top: 12vh;
 }
 
 .fern-landing.fern-with-title .fern-plant {
@@ -225,7 +225,6 @@ html, body, #root {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  height: 100%;
 }
 
 .fern-title {
@@ -320,7 +319,7 @@ html, body, #root {
 
 .fern-pre {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
-  font-size: 10px;
+  font-size: clamp(6px, 1.15vh, 10px);
   line-height: 1.1;
   letter-spacing: 0;
   user-select: none;
@@ -350,6 +349,57 @@ html, body, #root {
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+/* ─── Fern mobile ───────────────────────────────────────── */
+
+@media (max-width: 700px) {
+  .fern-landing.fern-with-title {
+    flex-direction: column;
+    align-items: center;
+    gap: 24px;
+    padding: 0 16px;
+  }
+
+  .fern-landing.fern-with-title .fern-info {
+    text-align: center;
+    max-width: 100%;
+    align-self: center;
+    margin-top: 18vh;
+  }
+
+  .fern-landing.fern-with-title .fern-plant {
+    max-width: 100%;
+    overflow: hidden;
+  }
+
+  .fern-title {
+    font-size: 32px;
+  }
+
+  .fern-description {
+    font-size: 15px;
+  }
+
+  .fern-codeblock {
+    font-size: 11px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .fern-pre {
+    font-size: 4.5px;
+    line-height: 1.0;
+  }
+
+  .fern-hash {
+    font-size: 11px;
+  }
+
+  .fern-footer {
+    bottom: 12px;
+    right: 12px;
+  }
 }
 
 
