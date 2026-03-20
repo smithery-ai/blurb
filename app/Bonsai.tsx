@@ -1,7 +1,8 @@
-import { useMemo } from "react"
+import { useMemo, useRef, useState, useCallback } from "react"
 
 // ASCII garden fern — multiple Barnsley fern fronds fanning from a center
 // Like a snapshot of a potted fern plant (engei = 園芸 = gardening)
+// Seeded from file content hash so same files = same fern
 
 type CellType = "stem" | "frond" | "tip"
 
@@ -22,8 +23,28 @@ const TRANSFORMS: [number, number, number, number, number, number, number][] = [
   [-0.15, 0.28, 0.26, 0.24, 0.00, 0.44, 0.07],
 ]
 
-function rand(min: number, max: number) {
-  return min + Math.random() * (max - min)
+// Mulberry32 seeded PRNG
+function mulberry32(seed: number) {
+  return () => {
+    seed |= 0; seed = seed + 0x6D2B79F5 | 0
+    let t = Math.imul(seed ^ seed >>> 15, 1 | seed)
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t
+    return ((t ^ t >>> 14) >>> 0) / 4294967296
+  }
+}
+
+// Simple string hash → 32-bit integer
+export function hashStr(s: string): number {
+  let h = 0
+  for (let i = 0; i < s.length; i++) {
+    h = Math.imul(31, h) + s.charCodeAt(i) | 0
+  }
+  return h
+}
+
+// Seeded random helpers
+function makeRand(rng: () => number) {
+  return (min: number, max: number) => min + rng() * (max - min)
 }
 
 interface Frond {
@@ -34,7 +55,10 @@ interface Frond {
   iters: number    // iterations for this frond
 }
 
-function generateGarden(cols: number, rows: number): Cell[][] {
+function generateGarden(cols: number, rows: number, seed: number): Cell[][] {
+  const rng = mulberry32(seed)
+  const rand = makeRand(rng)
+
   const grid: (Cell | null)[][] = Array.from({ length: rows }, () =>
     Array.from({ length: cols }, () => null)
   )
@@ -69,7 +93,7 @@ function generateGarden(cols: number, rows: number): Cell[][] {
     const sin = Math.sin(frond.angle)
 
     for (let i = 0; i < frond.iters; i++) {
-      const r = Math.random()
+      const r = rng()
       let cumP = 0
       let t = TRANSFORMS[0]
       for (const tr of TRANSFORMS) {
@@ -168,33 +192,88 @@ const COLORS: Record<string, Record<CellType, string[]>> = {
     tip:   ["#7aaa6a", "#8aba7a", "#6a9a5a", "#9aca8a"],
   },
   light: {
-    stem:  ["#5B4325", "#6B5335", "#4B3315"],
-    frond: ["#2a6a1a", "#3a7a2a", "#1a5a0a", "#4a8a3a"],
-    tip:   ["#5a9a4a", "#6aaa5a", "#4a8a3a", "#7aba6a"],
+    stem:  ["#4a3315", "#3a2305", "#5a4325"],
+    frond: ["#1a5a0a", "#2a6a1a", "#0a4a00", "#1a5510"],
+    tip:   ["#2a7a1a", "#3a8a2a", "#1a6a0a", "#2a7520"],
   },
 }
 
-export default function Bonsai({ theme }: { theme: "dark" | "light" }) {
-  const grid = useMemo(() => generateGarden(120, 55), [])
+// Darken a hex color by a factor (0 = black, 1 = unchanged)
+function darken(hex: string, factor: number): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  return `rgb(${Math.round(r * factor)},${Math.round(g * factor)},${Math.round(b * factor)})`
+}
+
+export default function Bonsai({ theme, seed = 0 }: { theme: "dark" | "light"; seed?: number }) {
+  const grid = useMemo(() => generateGarden(120, 55, seed), [seed])
   const colors = COLORS[theme]
+  const preRef = useRef<HTMLPreElement>(null)
+  const [mouse, setMouse] = useState<{ col: number; row: number } | null>(null)
+
+  const handleMouseMove = useCallback((e: React.MouseEvent) => {
+    const el = preRef.current
+    if (!el) return
+    const rect = el.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    // Estimate char size from element dimensions
+    const charW = rect.width / 120
+    const charH = rect.height / 55
+    setMouse({ col: x / charW, row: y / charH })
+  }, [])
+
+  const handleMouseLeave = useCallback(() => setMouse(null), [])
+
+  const RADIUS_X = 12 // wider horizontal spread
+  const RADIUS_Y = 6  // shorter vertical
+
+  // Stable per-cell noise from position (no re-randomizing)
+  const noise = useCallback((r: number, c: number) => {
+    const h = Math.sin(r * 127.1 + c * 311.7) * 43758.5453
+    return h - Math.floor(h) // 0..1
+  }, [])
 
   return (
     <div className="bonsai-landing">
-      <pre className="bonsai-pre">
+      <pre className="bonsai-pre" ref={preRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
         {grid.map((row, r) => (
           <span key={r}>
             {row.map((cell, c) => {
               if (cell.char === " ") return " "
               const palette = colors[cell.type]
-              const color = palette[(r + c) % palette.length]
+              const baseColor = palette[(r + c) % palette.length]
+
+              let pushY = 0
+              if (mouse) {
+                const dx = (c - mouse.col) / RADIUS_X
+                const dy = (r - mouse.row) / RADIUS_Y
+                const dist = Math.sqrt(dx * dx + dy * dy)
+                const jitter = noise(r, c) * 0.2
+                if (dist + jitter < 1) {
+                  const t = 1 - (dist + jitter)
+                  // Gaussian-ish push: strongest at center, curved falloff
+                  const strength = t * t * (3 - 2 * t)
+                  // Push down, slightly outward from center
+                  const dirY = r >= mouse.row ? 1 : 0.3 // mostly downward
+                  pushY = strength * 8 * dirY
+                }
+              }
+
+              const style: React.CSSProperties = pushY
+                ? { color: baseColor, display: "inline-block", transform: `translateY(${pushY}px)`, transition: "transform 0.15s ease-out" }
+                : { color: baseColor }
+
               return (
-                <span key={c} style={{ color }}>{cell.char}</span>
+                <span key={c} style={style}>{cell.char}</span>
               )
             })}
             {"\n"}
           </span>
         ))}
       </pre>
+      <p className="bonsai-hash">[#{(seed >>> 0).toString(16).padStart(8, "0")}]</p>
       <p className="bonsai-hint">select a file to get started</p>
     </div>
   )

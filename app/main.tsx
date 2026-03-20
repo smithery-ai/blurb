@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client"
 import FolderView from "./FolderView"
-import Bonsai from "./Bonsai"
+import Bonsai, { hashStr } from "./Bonsai"
 import "engei/styles"
 import "./app.css"
 
@@ -8,7 +8,10 @@ function App() {
   const path = window.location.pathname.replace(/^\//, "").replace(/\/$/, "")
 
   if (!path || !path.startsWith("~/public/")) {
-    return <FolderView slug="blurb" landing={(theme) => <Bonsai theme={theme} />} />
+    return <FolderView slug="blurb" landing={(theme, folder) => {
+      const seed = folder ? hashStr(folder.files.map(f => f.path + f.content).join("")) : 0
+      return <Bonsai theme={theme} seed={seed} />
+    }} />
   }
 
   const rest = path.replace(/^~\/public\//, "")

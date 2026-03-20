@@ -202,6 +202,13 @@ html, body, #root {
   user-select: none;
 }
 
+.bonsai-hash {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 14px;
+  opacity: 0.2;
+  letter-spacing: 0.15em;
+}
+
 .bonsai-hint {
   font-size: 13px;
   opacity: 0.3;

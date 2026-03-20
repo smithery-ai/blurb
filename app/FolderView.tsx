@@ -46,7 +46,7 @@ const CheckIcon = () => (
   </svg>
 )
 
-export default function FolderView({ slug, initialFile, landing }: { slug: string; initialFile?: string; landing?: (theme: "dark" | "light") => React.ReactNode }) {
+export default function FolderView({ slug, initialFile, landing }: { slug: string; initialFile?: string; landing?: (theme: "dark" | "light", folder: Folder | null) => React.ReactNode }) {
   const [folder, setFolder] = useState<Folder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -346,7 +346,7 @@ export default function FolderView({ slug, initialFile, landing }: { slug: strin
               onLinkClick={handleLinkClick}
             />
           ) : landing ? (
-            landing(theme)
+            landing(theme, folder)
           ) : (
             <div className="error">Select a file</div>
           )}

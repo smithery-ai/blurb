@@ -90,7 +90,7 @@ export const HOME_FOLDER = {
   files: [
     {
       id: "home-index",
-      path: "index.md",
+      path: "README.md",
       content: INDEX_MD,
       language: null,
       comments: [],
