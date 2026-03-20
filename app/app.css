@@ -33,7 +33,6 @@ html, body, #root {
   position: relative;
   overflow: hidden;
   border-right: 1px solid var(--widget-border, #3a3530);
-  transition: border-color 0.2s ease;
 }
 
 /* Inner content stays at fixed width — text never reflows */
