@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
+import { hashStr, renderFernSVG } from "../lib/fern-core"
 
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string }
@@ -15,16 +16,32 @@ function serveSPA(c: any) {
   return c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
 }
 
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;")
+}
+
 /** Serve SPA with folder data inlined to eliminate client-side JSON fetch */
-async function serveSPAWithData(c: any, data: object) {
+async function serveSPAWithData(c: any, data: any) {
   const url = new URL(c.req.url)
   const htmlRes = await c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
   const html = await htmlRes.text()
-  // Inject data before closing </head> — available before React mounts
-  const json = JSON.stringify(data).replace(/</g, "\\u003c") // prevent XSS via </script>
+  const json = JSON.stringify(data).replace(/</g, "\\u003c")
+
+  // OG meta tags for link previews
+  const ogTags = data.slug ? `
+    <meta property="og:title" content="${escapeHtml(data.title || "Blurb")}" />
+    <meta property="og:description" content="${escapeHtml((data.description || "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"))}" />
+    <meta property="og:image" content="${url.origin}/~/public/${data.slug}/og.svg" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="${url.origin}/~/public/${data.slug}" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <title>${escapeHtml(data.title || "Blurb")}</title>` : ""
+
   const injected = html.replace(
     "</head>",
-    `<script>window.__FOLDER_DATA__=${json}</script>\n</head>`,
+    `${ogTags}\n<script>window.__FOLDER_DATA__=${json}</script>\n</head>`,
   )
   return new Response(injected, {
     headers: {
@@ -59,10 +76,15 @@ app.get("/", (c) => c.redirect("/~/public/blurb"))
 app.post("/~/public", async (c) => {
   const body = await c.req.json<{
     title?: string
+    description?: string
+    command?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  const landingErr = db.validateLanding(body.description, body.command)
+  if (landingErr) return c.json({ error: landingErr }, 400)
 
   for (const f of body.files) {
     const err = db.validatePath(f.path)
@@ -70,7 +92,10 @@ app.post("/~/public", async (c) => {
   }
 
   const slug = await uniqueSlug(c.env.DB)
-  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files)
+  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
+    description: body.description,
+    command: body.command,
+  })
   return c.json(folder, 201)
 })
 
@@ -79,10 +104,15 @@ app.put("/~/public/:slug", async (c) => {
   const slug = c.req.param("slug")
   const body = await c.req.json<{
     title?: string
+    description?: string
+    command?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  const landingErr = db.validateLanding(body.description, body.command)
+  if (landingErr) return c.json({ error: landingErr }, 400)
 
   for (const f of body.files) {
     const err = db.validatePath(f.path)
@@ -92,10 +122,23 @@ app.put("/~/public/:slug", async (c) => {
   // Delete existing folder if present, then recreate with same slug
   const existing = await db.getFolder(c.env.DB, slug)
   if (existing) {
-    await c.env.DB.prepare("DELETE FROM folders WHERE slug = ?").bind(slug).run()
+    // Must delete in order: replies → comments → files → folder (no CASCADE)
+    await c.env.DB.prepare(`
+      DELETE FROM replies WHERE comment_id IN (
+        SELECT c.id FROM comments c JOIN files f ON c.file_id = f.id WHERE f.folder_id = ?
+      )`).bind(existing.id).run()
+    await c.env.DB.prepare(`
+      DELETE FROM comments WHERE file_id IN (
+        SELECT id FROM files WHERE folder_id = ?
+      )`).bind(existing.id).run()
+    await c.env.DB.prepare("DELETE FROM files WHERE folder_id = ?").bind(existing.id).run()
+    await c.env.DB.prepare("DELETE FROM folders WHERE id = ?").bind(existing.id).run()
   }
 
-  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files)
+  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
+    description: body.description,
+    command: body.command,
+  })
   return c.json(folder, existing ? 200 : 201)
 })
 
@@ -109,6 +152,27 @@ app.get("/~/public/:slug", async (c) => {
     return c.json(folder)
   }
   return serveSPAWithData(c, folder)
+})
+
+// ─── OG image ────────────────────────────────────────────────
+
+app.get("/~/public/:slug/og.svg", async (c) => {
+  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  const seed = hashStr(folder.files.map((f: any) => f.path + f.content).join(""))
+  const svg = renderFernSVG({
+    seed,
+    title: folder.title,
+    description: folder.description,
+  })
+
+  return new Response(svg, {
+    headers: {
+      "Content-Type": "image/svg+xml",
+      "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+    },
+  })
 })
 
 // ─── File + comment routes ──────────────────────────────────

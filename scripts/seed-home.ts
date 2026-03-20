@@ -14,17 +14,23 @@ const widgetSpec = readFileSync(join(root, ".claude/skills/blurb/references/widg
 
 const readme = `# Blurb
 
-Share folders with inline comments.
+Beautiful collaborative gists for humans and agents.
 
-Blurb turns markdown into rich, shareable documents — with charts, diagrams, maps, code, and inline commenting. Every Blurb page is a folder of files, rendered with live widgets.
-
-**This page is itself a Blurb folder.** Browse the sidebar to see the skill files that power it.
+Blurb gives you shareable folders of markdown files — rendered with rich widgets, inline comments, and real-time collaboration. Write in markdown, get charts, diagrams, maps, and more.
 
 ---
 
-## Quick Start
+## Get Started
 
-Create a folder with a single curl:
+### As a Claude Code skill
+
+\`\`\`bash
+npx skills add smithery-ai/blurb
+\`\`\`
+
+Then ask Claude to publish anything — reports, plans, analyses — and it creates a shareable Blurb URL.
+
+### Via the API
 
 \`\`\`bash
 curl -X POST https://blurb.md/~/public \\
@@ -32,13 +38,13 @@ curl -X POST https://blurb.md/~/public \\
   -d '{"title":"Hello","files":[{"path":"readme.md","content":"# Hello World"}]}'
 \`\`\`
 
-The response gives you a slug — your folder is live at \`https://blurb.md/~/public/{slug}\`.
+Your folder is live at \`https://blurb.md/~/public/{slug}\`.
 
 ---
 
 ## Widgets
 
-Embed rich widgets in any markdown file using fenced code blocks.
+Embed rich widgets using fenced code blocks in any markdown file.
 
 ### Charts
 
@@ -53,7 +59,7 @@ graph LR
     A[Markdown] --> B[Blurb API]
     B --> C[Shareable URL]
     C --> D[Rich Preview]
-    D --> E[Comments]
+    D --> E[Comments & Collaboration]
 \`\`\`
 
 ### Sketches
@@ -62,9 +68,13 @@ graph LR
 {"width":600,"height":140,"elements":[{"type":"rect","x":20,"y":30,"width":120,"height":70,"fill":"#a5d8ff","color":"#1971c2","label":"Write"},{"type":"arrow","x1":140,"y1":65,"x2":220,"y2":65,"color":"#868e96"},{"type":"rect","x":220,"y":30,"width":120,"height":70,"fill":"#b2f2bb","color":"#2f9e44","label":"Publish"},{"type":"arrow","x1":340,"y1":65,"x2":420,"y2":65,"color":"#868e96"},{"type":"rect","x":420,"y":30,"width":120,"height":70,"fill":"#ffd8a8","color":"#e8590c","label":"Share"}]}
 \`\`\`
 
-### And more
+Maps, timelines, calendars, globes, math, tables, diffs, embeds, and custom HTML — see [widget-spec.md](.claude/skills/blurb/references/widget-spec.md) for the full list.
 
-Maps, timelines, calendars, globes, math, tables, diffs, embeds, and custom HTML. See [.claude/skills/blurb/references/widget-spec.md](.claude/skills/blurb/references/widget-spec.md) for the full spec.
+---
+
+## Collaborate
+
+Select any text in a rendered file to leave an inline comment. Comments are threaded with replies — great for code reviews, feedback on reports, or async collaboration between humans and agents.
 
 ---
 
@@ -78,19 +88,17 @@ Maps, timelines, calendars, globes, math, tables, diffs, embeds, and custom HTML
 | PATCH | \`/~/public/:slug/:path\` | Edit file with diffs |
 | DELETE | \`/~/public/:slug/:path\` | Delete a file |
 
-Full API docs in [.claude/skills/blurb/SKILL.md](.claude/skills/blurb/SKILL.md).
+Full API docs in [SKILL.md](.claude/skills/blurb/SKILL.md).
 
 ---
 
-## Claude Code Skill
-
-Blurb ships as a Claude Code skill. Add it to your project and Claude can publish artifacts, reports, and plans as shareable URLs — directly from your terminal.
-
-Browse the \`.claude/skills/\` folder in the sidebar to see the skill definition.
+**This page is itself a Blurb folder.** Browse the sidebar to see the skill files that power it.
 `
 
 const body = {
   title: "Blurb",
+  description: "Beautiful collaborative gists for humans and agents. Check out the [readme](https://blurb.md/~/public/blurb/README.md)",
+  command: "npx skills add smithery-ai/blurb",
   files: [
     { path: "README.md", content: readme },
     { path: ".claude/skills/blurb/SKILL.md", content: skill },

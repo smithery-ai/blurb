@@ -35,7 +35,7 @@ export async function getFolder(db: DB, slug: string) {
   // Single query: JOIN folders → files → comments → replies
   const rows = await db.prepare(`
     SELECT
-      fo.id as folder_id, fo.slug, fo.title, fo.created_at as folder_created_at,
+      fo.id as folder_id, fo.slug, fo.title, fo.description as folder_description, fo.command as folder_command, fo.created_at as folder_created_at,
       f.id as file_id, f.path, f.content, f.language, f.sort_order,
       c.id as comment_id, c.anchor_json, c.body as comment_body, c.author as comment_author, c.created_at as comment_created_at,
       r.id as reply_id, r.body as reply_body, r.author as reply_author, r.created_at as reply_created_at
@@ -110,9 +110,20 @@ export async function getFolder(db: DB, slug: string) {
     id: first.folder_id,
     slug: first.slug,
     title: first.title,
+    description: first.folder_description || undefined,
+    command: first.folder_command || undefined,
     createdAt: first.folder_created_at,
     files: enrichedFiles,
   }
+}
+
+export const DESCRIPTION_MAX = 160
+export const COMMAND_MAX = 100
+
+export function validateLanding(description?: string, command?: string): string | null {
+  if (description && description.length > DESCRIPTION_MAX) return `description must be ≤${DESCRIPTION_MAX} characters`
+  if (command && command.length > COMMAND_MAX) return `command must be ≤${COMMAND_MAX} characters`
+  return null
 }
 
 export async function createFolder(
@@ -120,11 +131,13 @@ export async function createFolder(
   slug: string,
   title: string,
   files: { path: string; content: string }[],
+  opts?: { description?: string; command?: string },
 ) {
   const folderId = id()
 
   const stmts = [
-    db.prepare("INSERT INTO folders (id, slug, title) VALUES (?, ?, ?)").bind(folderId, slug, title),
+    db.prepare("INSERT INTO folders (id, slug, title, description, command) VALUES (?, ?, ?, ?, ?)")
+      .bind(folderId, slug, title, opts?.description || null, opts?.command || null),
     ...files.map((f, i) =>
       db.prepare(
         "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"

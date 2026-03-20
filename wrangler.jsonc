@@ -16,7 +16,7 @@
     {
       "binding": "DB",
       "database_name": "sono-worker-db",
-      // "database_id": "<your-d1-database-id>",
+      "database_id": "1aeed64e-9fd8-4370-aac3-eeca95ee3e8c",
       "migrations_dir": "migrations"
     }
   ]

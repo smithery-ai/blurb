@@ -195,26 +195,16 @@ html, body, #root {
 }
 
 .fern-landing.fern-with-title {
-  display: grid;
-  grid-template-columns: 1fr 2fr;
-  height: 100%;
+  flex-direction: row;
+  align-items: center;
+  gap: 48px;
 }
 
 .fern-landing.fern-with-title .fern-info {
-  display: flex;
-  flex-direction: column;
-  padding-left: 48px;
-  height: 100%;
-}
-
-.fern-landing.fern-with-title .fern-info::before {
-  content: '';
-  flex: 1;
-}
-
-.fern-landing.fern-with-title .fern-info::after {
-  content: '';
-  flex: 3;
+  text-align: left;
+  max-width: 280px;
+  align-self: flex-start;
+  margin-top: 15vh;
 }
 
 .fern-landing.fern-with-title .fern-plant {
@@ -240,6 +230,81 @@ html, body, #root {
   margin-top: 4px;
 }
 
+.fern-description a {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.8;
+  transition: opacity 0.15s ease;
+}
+
+.fern-description a:hover {
+  opacity: 1;
+}
+
+.fern-codeblock {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  width: fit-content;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.12s ease;
+}
+
+.fern-codeblock:hover {
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.fern-cb-clicked {
+  animation: cb-spring-click 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cb-spring-click {
+  0% { transform: scale(1); }
+  30% { transform: scale(0.985); }
+  70% { transform: scale(1.005); }
+  100% { transform: scale(1); }
+}
+
+.fern-cb-cmd {
+  color: rgba(130, 230, 130, 0.8);
+}
+
+.fern-cb-arg {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.fern-cb-copy {
+  display: flex;
+  align-items: center;
+  opacity: 0.4;
+  transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.fern-cb-copy svg {
+  animation: cb-icon-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes cb-icon-enter {
+  0% { opacity: 0; transform: scale(0.6); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.fern-codeblock:hover .fern-cb-copy {
+  opacity: 1;
+}
+
 .fern-pre {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 10px;
@@ -259,6 +324,146 @@ html, body, #root {
   font-size: 14px;
   opacity: 0.2;
   letter-spacing: 0.15em;
+  margin-top: 24px;
+}
+
+.fern-footer {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  font-size: 12px;
+  opacity: 0.25;
+  letter-spacing: 0.05em;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+
+/* ─── Share modal ────────────────────────────────────────── */
+
+.share-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: share-fade-in 0.15s ease both;
+}
+
+@keyframes share-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.share-modal {
+  background: #1e1e1e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  width: 480px;
+  max-width: 90vw;
+  overflow: hidden;
+  position: relative;
+  animation: share-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes share-enter {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.share-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  background: none;
+  border: none;
+  color: #e0e0e0;
+  opacity: 0.4;
+  cursor: pointer;
+  padding: 4px;
+  z-index: 1;
+  transition: opacity 0.15s ease;
+}
+
+.share-close:hover {
+  opacity: 1;
+}
+
+.share-preview {
+}
+
+.share-og-image {
+  width: 100%;
+  display: block;
+  border-radius: 12px 12px 0 0;
+}
+
+.share-meta {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.share-meta-domain {
+  font-size: 11px;
+  opacity: 0.4;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.share-meta-title {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.share-meta-desc {
+  font-size: 12px;
+  opacity: 0.5;
+}
+
+.share-url-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  position: relative;
+}
+
+.share-url {
+  flex: 1;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 6px;
+  padding: 8px 36px 8px 12px;
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 12px;
+  color: #e0e0e0;
+  outline: none;
+}
+
+.share-url:focus {
+  border-color: rgba(255,255,255,0.25);
+}
+
+.share-copy {
+  position: absolute;
+  right: 20px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #e0e0e0;
+  opacity: 0.4;
+  transition: opacity 0.15s ease;
+  display: flex;
+  align-items: center;
+  padding: 4px;
+}
+
+.share-copy:hover {
+  opacity: 1;
 }
 
 /* ─── Mobile sidebar toggle ─────────────────────────────── */

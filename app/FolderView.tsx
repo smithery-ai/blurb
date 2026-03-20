@@ -5,6 +5,7 @@ import type { Anchor, Comment, TreeFile } from "engei"
 const widgets = getDefaultWidgets()
 import { fetchFolder, postComment, deleteComment, postReply } from "./api"
 import Fern, { hashStr } from "./Fern"
+import ShareModal from "./ShareModal"
 
 interface FolderFile {
   id: string
@@ -18,6 +19,8 @@ interface Folder {
   id: string
   slug: string
   title: string
+  description?: string
+  command?: string
   files: FolderFile[]
 }
 
@@ -41,13 +44,19 @@ const CopyIcon = () => (
   </svg>
 )
 
+const ShareIcon = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+  </svg>
+)
+
 const CheckIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 6L9 17l-5-5" />
   </svg>
 )
 
-export default function FolderView({ slug, initialFile, landingDescription }: { slug: string; initialFile?: string; landingDescription?: string }) {
+export default function FolderView({ slug, initialFile }: { slug: string; initialFile?: string }) {
   const [folder, setFolder] = useState<Folder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -59,6 +68,7 @@ export default function FolderView({ slug, initialFile, landingDescription }: { 
   })
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth > 640)
   const [copied, setCopied] = useState(false)
+  const [showShare, setShowShare] = useState(false)
 
   const load = useCallback(async () => {
     const data = await fetchFolder(slug) as any
@@ -325,6 +335,12 @@ export default function FolderView({ slug, initialFile, landingDescription }: { 
           )}
           <button
             className="theme-toggle"
+            onClick={() => setShowShare(true)}
+          >
+            <ShareIcon />
+          </button>
+          <button
+            className="theme-toggle"
             onClick={() => setTheme(t => t === "dark" ? "light" : "dark")}
           >
             {theme === "dark" ? <SunIcon /> : <MoonIcon />}
@@ -351,11 +367,20 @@ export default function FolderView({ slug, initialFile, landingDescription }: { 
               theme={theme}
               seed={folder ? hashStr(folder.files.map(f => f.path + f.content).join("")) : 0}
               title={folder?.title}
-              description={landingDescription}
+              description={folder?.description}
+              command={folder?.command}
             />
           )}
         </div>
       </div>
+      {showShare && folder && (
+        <ShareModal
+          slug={slug}
+          title={folder.title}
+          description={folder.description}
+          onClose={() => setShowShare(false)}
+        />
+      )}
     </div>
   )
 }
