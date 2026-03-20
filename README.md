@@ -18,7 +18,7 @@ Then in Claude Code:
 /blurb plan a 5-day trip from Tokyo to Osaka
 ```
 
-You'll get a shareable link. Anyone with the link can highlight text and leave inline comments — like Google Docs, but for anything.
+You'll get a shareable link at `blurb.md/~/public/{slug}`.
 
 ### Why?
 
