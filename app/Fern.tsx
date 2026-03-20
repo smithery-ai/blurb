@@ -198,15 +198,7 @@ const COLORS: Record<string, Record<CellType, string[]>> = {
   },
 }
 
-// Darken a hex color by a factor (0 = black, 1 = unchanged)
-function darken(hex: string, factor: number): string {
-  const r = parseInt(hex.slice(1, 3), 16)
-  const g = parseInt(hex.slice(3, 5), 16)
-  const b = parseInt(hex.slice(5, 7), 16)
-  return `rgb(${Math.round(r * factor)},${Math.round(g * factor)},${Math.round(b * factor)})`
-}
-
-export default function Bonsai({ theme, seed = 0 }: { theme: "dark" | "light"; seed?: number }) {
+export default function Fern({ theme, seed = 0 }: { theme: "dark" | "light"; seed?: number }) {
   const grid = useMemo(() => generateGarden(120, 55, seed), [seed])
   const colors = COLORS[theme]
   const preRef = useRef<HTMLPreElement>(null)
@@ -236,8 +228,8 @@ export default function Bonsai({ theme, seed = 0 }: { theme: "dark" | "light"; s
   }, [])
 
   return (
-    <div className="bonsai-landing">
-      <pre className="bonsai-pre" ref={preRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
+    <div className="fern-landing">
+      <pre className="fern-pre" ref={preRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
         {grid.map((row, r) => (
           <span key={r}>
             {row.map((cell, c) => {
@@ -273,8 +265,8 @@ export default function Bonsai({ theme, seed = 0 }: { theme: "dark" | "light"; s
           </span>
         ))}
       </pre>
-      <p className="bonsai-hash">[#{(seed >>> 0).toString(16).padStart(8, "0")}]</p>
-      <p className="bonsai-hint">select a file to get started</p>
+      <p className="fern-hash">[#{(seed >>> 0).toString(16).padStart(8, "0")}]</p>
+      <p className="fern-hint">select a file to get started</p>
     </div>
   )
 }

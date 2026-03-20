@@ -185,7 +185,7 @@ html, body, #root {
 
 /* ─── Bonsai landing ───────────────────────────────────── */
 
-.bonsai-landing {
+.fern-landing {
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -194,7 +194,7 @@ html, body, #root {
   gap: 16px;
 }
 
-.bonsai-pre {
+.fern-pre {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 10px;
   line-height: 1.1;
@@ -202,14 +202,14 @@ html, body, #root {
   user-select: none;
 }
 
-.bonsai-hash {
+.fern-hash {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 14px;
   opacity: 0.2;
   letter-spacing: 0.15em;
 }
 
-.bonsai-hint {
+.fern-hint {
   font-size: 13px;
   opacity: 0.3;
   font-weight: 300;
