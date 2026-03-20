@@ -1,6 +1,5 @@
 import { createRoot } from "react-dom/client"
 import FolderView from "./FolderView"
-import Fern, { hashStr } from "./Fern"
 import "engei/styles"
 import "./app.css"
 
@@ -8,10 +7,7 @@ function App() {
   const path = window.location.pathname.replace(/^\//, "").replace(/\/$/, "")
 
   if (!path || !path.startsWith("~/public/")) {
-    return <FolderView slug="blurb" landing={(theme, folder) => {
-      const seed = folder ? hashStr(folder.files.map(f => f.path + f.content).join("")) : 0
-      return <Fern theme={theme} seed={seed} />
-    }} />
+    return <FolderView slug="blurb" />
   }
 
   const rest = path.replace(/^~\/public\//, "")
