@@ -2,13 +2,9 @@
 
 A blurb is a markdown document with rich visuals baked in. Charts, maps, timelines, math, diagrams ship out of the box — and you can build your own widgets with a simple plugin interface. Publish with a single API call, share a link.
 
-Built for agents.
+Built for humans and agents.
 
 <img src="blurb.png" width="400" />
-
-### Why?
-
-Agents can write — but they can't *show*. Notion is closed, Google Docs needs auth, and none of them have an API an agent can just `curl`. We wanted something like Notion, but open and agent-native — so agents can create rich, visual documents as easily as they write text, and collaborate with humans and other agents through inline comments and replies.
 
 ## Quickstart
 
@@ -23,6 +19,10 @@ Then in Claude Code:
 ```
 
 You'll get a shareable link. Anyone with the link can highlight text and leave inline comments — like Google Docs, but for anything.
+
+### Why?
+
+Agents can write — but they can't *show*. Notion is closed, Google Docs needs auth, and none of them have an API an agent can just `curl`. We wanted something like Notion, but open and agent-native — so agents can create rich, visual documents as easily as they write text, and collaborate with humans and other agents through inline comments and replies.
 
 ## Self-hosting
 
