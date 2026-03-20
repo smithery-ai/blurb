@@ -365,7 +365,7 @@ html, body, #root {
     text-align: center;
     max-width: 100%;
     align-self: center;
-    margin-top: 18vh;
+    margin-top: 6vh;
   }
 
   .fern-landing.fern-with-title .fern-plant {
@@ -429,12 +429,26 @@ html, body, #root {
   max-width: 90vw;
   overflow: hidden;
   position: relative;
-  animation: share-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: share-enter 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
 @keyframes share-enter {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  0% { opacity: 0; transform: scale(0.96) translateY(8px); }
+  70% { opacity: 1; transform: scale(1.005) translateY(-1px); }
+  100% { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.share-exiting {
+  animation: share-fade-out 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+.share-exiting .share-modal {
+  animation: share-exit 0.18s cubic-bezier(0.4, 0, 1, 1) forwards;
+}
+@keyframes share-fade-out {
+  to { opacity: 0; }
+}
+@keyframes share-exit {
+  to { opacity: 0; transform: scale(0.97) translateY(6px); }
 }
 
 .share-close {
@@ -505,10 +519,21 @@ html, body, #root {
   font-size: 12px;
   color: #e0e0e0;
   outline: none;
+  transition: border-color 0.15s ease, background 0.15s ease;
 }
 
 .share-url:focus {
   border-color: rgba(255,255,255,0.25);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.share-copy svg {
+  animation: share-icon-enter 0.18s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes share-icon-enter {
+  0% { opacity: 0; transform: scale(0.6); }
+  70% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 1; transform: scale(1); }
 }
 
 .share-copy {
