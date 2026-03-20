@@ -114,7 +114,7 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
 
   const file = folder.files.find(f => f.path === activePath)
   const treeFiles: TreeFile[] = folder.files.map(f => ({ id: f.id, path: f.path }))
-  const showSidebar = folder.files.length > 1
+  const showSidebar = true
 
   // Breadcrumb: ~/public/{slug}/{filePath}
   // Each segment has a label and optional nav target (path to navigate to)
@@ -159,35 +159,60 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
     })
   }
 
-  const handleCreateComment = async (anchor: Anchor) => {
+  const handleCreateComment = async (anchor: Anchor, body?: string) => {
     if (!file) return
     const tempId = `temp-${Date.now()}`
     updateFileComments(file.id, comments => [
       ...comments,
-      { id: tempId, anchor, body: "", author: "You", createdAt: new Date().toISOString(), replies: [] },
+      { id: tempId, anchor, body: body || "", author: "You", createdAt: new Date().toISOString(), replies: [] },
     ])
-    postComment(slug, file.path, anchor, "")
+    if (body) {
+      // Preview path: anchor+body submitted together — persist immediately
+      const result = await postComment(slug, file.path, anchor, body)
+      if (result.ok) {
+        updateFileComments(file.id, comments =>
+          comments.map(c => c.id === tempId ? { ...c, id: result.data.id } : c)
+        )
+      } else {
+        updateFileComments(file.id, comments => comments.filter(c => c.id !== tempId))
+      }
+    }
+    // If no body, this is a draft — will be persisted when handleUpdateComment is called.
   }
 
   const handleUpdateComment = async (commentId: string, body: string) => {
     if (!file) return
     const comment = file.comments.find(c => c.id === commentId)
     if (!comment) return
+    // Optimistic: show the body immediately
     updateFileComments(file.id, comments =>
       comments.map(c => c.id === commentId ? { ...c, body } : c)
     )
-    postComment(slug, file.path, comment.anchor, body)
+    // Create on server and swap temp ID with real ID
+    const result = await postComment(slug, file.path, comment.anchor, body)
+    if (result.ok) {
+      updateFileComments(file.id, comments =>
+        comments.map(c => c.id === commentId ? { ...c, id: result.data.id } : c)
+      )
+    } else {
+      // Rollback: remove the comment on failure
+      updateFileComments(file.id, comments => comments.filter(c => c.id !== commentId))
+    }
   }
 
   const handleDeleteComment = async (commentId: string) => {
     if (!file) return
     updateFileComments(file.id, comments => comments.filter(c => c.id !== commentId))
-    deleteComment(slug, file.path, commentId)
+    // Only call server if it's a persisted comment (not a local draft)
+    if (!commentId.startsWith("temp-")) {
+      await deleteComment(slug, file.path, commentId)
+    }
   }
 
   const handleAddReply = async (commentId: string, body: string) => {
     if (!file) return
     const tempId = `temp-${Date.now()}`
+    // Optimistic: show reply immediately
     updateFileComments(file.id, comments =>
       comments.map(c =>
         c.id === commentId
@@ -195,7 +220,26 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
           : c
       )
     )
-    postReply(slug, file.path, commentId, body)
+    const result = await postReply(slug, file.path, commentId, body)
+    if (result.ok) {
+      // Swap temp reply ID with real ID
+      updateFileComments(file.id, comments =>
+        comments.map(c =>
+          c.id === commentId
+            ? { ...c, replies: c.replies.map(r => r.id === tempId ? { ...r, id: result.data.id } : r) }
+            : c
+        )
+      )
+    } else {
+      // Rollback: remove the temp reply
+      updateFileComments(file.id, comments =>
+        comments.map(c =>
+          c.id === commentId
+            ? { ...c, replies: c.replies.filter(r => r.id !== tempId) }
+            : c
+        )
+      )
+    }
   }
 
   const handleLinkClick = (href: string) => {
