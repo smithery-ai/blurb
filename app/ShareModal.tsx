@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useState, useCallback } from "react"
 
 export default function ShareModal({ slug, title, description, onClose }: {
   slug: string
@@ -7,9 +7,15 @@ export default function ShareModal({ slug, title, description, onClose }: {
   onClose: () => void
 }) {
   const [copied, setCopied] = useState(false)
+  const [exiting, setExiting] = useState(false)
   const url = `https://blurb.md/~/public/${slug}`
   const ogUrl = `/~/public/${slug}/og.svg`
   const desc = description?.replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") || ""
+
+  const handleClose = useCallback(() => {
+    setExiting(true)
+    setTimeout(onClose, 180)
+  }, [onClose])
 
   const handleCopy = () => {
     navigator.clipboard.writeText(url)
@@ -18,9 +24,9 @@ export default function ShareModal({ slug, title, description, onClose }: {
   }
 
   return (
-    <div className="share-backdrop" onClick={onClose}>
+    <div className={`share-backdrop${exiting ? " share-exiting" : ""}`} onClick={handleClose}>
       <div className="share-modal" onClick={e => e.stopPropagation()}>
-        <button className="share-close" onClick={onClose}>
+        <button className="share-close" onClick={handleClose}>
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6 6 18"/><path d="m6 6 12 12"/>
           </svg>
