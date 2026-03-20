@@ -182,7 +182,13 @@ html, body, #root {
   border-radius: 4px;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.12s ease, background 0.12s ease;
+  transition: opacity 0.2s ease 0.2s, background 0.12s ease;
+}
+
+.sidebar-toggle.hidden {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
 }
 
 .sidebar-toggle:hover {
