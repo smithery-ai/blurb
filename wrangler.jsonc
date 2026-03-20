@@ -19,5 +19,19 @@
       "database_id": "1aeed64e-9fd8-4370-aac3-eeca95ee3e8c",
       "migrations_dir": "migrations"
     }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "ROOMS",
+        "class_name": "DocumentRoom"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_classes": ["DocumentRoom"]
+    }
   ]
 }

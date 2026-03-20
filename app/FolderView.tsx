@@ -4,6 +4,7 @@ import type { Anchor, Comment, TreeFile } from "engei"
 
 const widgets = getDefaultWidgets()
 import { fetchFolder, postComment, postReply } from "./api"
+import { useDocumentSocket } from "./useSocket"
 import Fern, { hashStr } from "./Fern"
 import ShareModal from "./ShareModal"
 
@@ -83,6 +84,78 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
   }, [slug])
 
   useEffect(() => { load() }, [load])
+
+  // ─── Live updates via WebSocket ──────────────────────────
+  useDocumentSocket(slug, useCallback((event) => {
+    if (event.type === "folder:replaced") {
+      load()
+      return
+    }
+
+    setFolder(prev => {
+      if (!prev) return prev
+      switch (event.type) {
+        case "comment:created": {
+          // Skip if we already have this comment (optimistic update)
+          const file = prev.files.find(f => f.id === event.fileId)
+          if (file?.comments.some(c => c.id === event.comment.id)) return prev
+          return {
+            ...prev,
+            files: prev.files.map(f =>
+              f.id === event.fileId
+                ? { ...f, comments: [...f.comments, event.comment] }
+                : f
+            ),
+          }
+        }
+        case "comment:deleted":
+          return {
+            ...prev,
+            files: prev.files.map(f => ({
+              ...f,
+              comments: f.comments.filter(c => c.id !== event.commentId),
+            })),
+          }
+        case "reply:created": {
+          return {
+            ...prev,
+            files: prev.files.map(f => ({
+              ...f,
+              comments: f.comments.map(c => {
+                if (c.id !== event.commentId) return c
+                // Skip if we already have this reply
+                if (c.replies.some(r => r.id === event.reply.id)) return c
+                return { ...c, replies: [...c.replies, event.reply] }
+              }),
+            })),
+          }
+        }
+        case "file:updated":
+          return {
+            ...prev,
+            files: prev.files.map(f =>
+              f.id === event.fileId ? { ...f, content: event.content } : f
+            ),
+          }
+        case "file:created":
+          if (prev.files.some(f => f.id === event.fileId)) return prev
+          return {
+            ...prev,
+            files: [...prev.files, {
+              id: event.fileId, path: event.path, content: event.content,
+              language: null, comments: [],
+            }],
+          }
+        case "file:deleted":
+          return {
+            ...prev,
+            files: prev.files.filter(f => f.id !== event.fileId),
+          }
+        default:
+          return prev
+      }
+    })
+  }, [load]))
 
   useEffect(() => {
     document.title = folder?.title ? `${folder.title} — Blurb` : "Blurb"

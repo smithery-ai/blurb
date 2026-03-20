@@ -36,5 +36,9 @@ export async function teardownTestEnv() {
 /** Make a request against the Hono app with real D1 */
 export function request(path: string, init?: RequestInit) {
   const req = new Request(`https://test.local${path}`, init)
-  return app.fetch(req, { DB: db, ADMIN_TOKEN: TEST_ADMIN_TOKEN, ASSETS: { fetch: () => new Response("<!DOCTYPE html><html><head></head><body></body></html>") } as any })
+  const mockRooms = {
+    idFromName: () => ({ toString: () => "test" }),
+    get: () => ({ fetch: () => Promise.resolve(new Response("ok")) }),
+  }
+  return app.fetch(req, { DB: db, ADMIN_TOKEN: TEST_ADMIN_TOKEN, ROOMS: mockRooms as any, ASSETS: { fetch: () => new Response("<!DOCTYPE html><html><head></head><body></body></html>") } as any })
 }

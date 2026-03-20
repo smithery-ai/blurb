@@ -33,6 +33,17 @@ function fireWebhook(url: string, payload: object) {
   }).catch(() => {}).finally(() => clearTimeout(timeout))
 }
 
+/** Broadcast a real-time event to all viewers of a document */
+function broadcastToRoom(c: any, slug: string, event: object) {
+  const roomId = c.env.ROOMS.idFromName(slug)
+  const room = c.env.ROOMS.get(roomId)
+  const promise = room.fetch(new Request("http://room/broadcast", {
+    method: "POST",
+    body: JSON.stringify(event),
+  })).catch(() => {})
+  safeWaitUntil(c, promise)
+}
+
 /** Safe waitUntil — falls back to fire-and-forget if no ExecutionContext */
 function safeWaitUntil(c: any, promise: Promise<any>) {
   try {
@@ -538,6 +549,18 @@ app.get("/", async (c) => {
   return c.text(file.content as string)
 })
 
+// ─── WebSocket route (live updates) ─────────────────────────
+
+app.get("/~/public/:slug/@ws", async (c) => {
+  const upgradeHeader = c.req.header("Upgrade")
+  if (upgradeHeader !== "websocket") return c.text("Expected WebSocket", 426)
+
+  const slug = c.req.param("slug")
+  const roomId = c.env.ROOMS.idFromName(slug)
+  const room = c.env.ROOMS.get(roomId)
+  return room.fetch(c.req.raw)
+})
+
 // ─── Folder routes ──────────────────────────────────────────
 
 app.post("/~/public", async (c) => {
@@ -678,6 +701,7 @@ app.put("/~/public/:slug", async (c) => {
   })
   const result: any = returnToken ? { ...folder, token: returnToken } : folder
   if (hook) result.hook = { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token }
+  if (existingMeta) broadcastToRoom(c, slug, { type: "folder:replaced", slug })
   return c.json(result, existingMeta ? 200 : 201)
 })
 
@@ -796,8 +820,13 @@ app.put("/~/public/:slug/:path{.+}", async (c) => {
   const pathErr = db.validatePath(path)
   if (pathErr) return c.json({ error: `Invalid path: ${pathErr}` }, 400)
 
-  const result = await db.replaceFile(c.env.DB, c.req.param("slug"), path, body.content)
+  const slug = c.req.param("slug")
+  const result = await db.replaceFile(c.env.DB, slug, path, body.content)
   if (!result) return c.json({ error: "Folder not found" }, 404)
+  broadcastToRoom(c, slug, {
+    type: result.created ? "file:created" : "file:updated",
+    fileId: result.id, path, content: body.content,
+  })
   return c.json(result, result.created ? 201 : 200)
 })
 
@@ -808,8 +837,19 @@ app.patch("/~/public/:slug/:path{.+}", async (c) => {
   const body = await c.req.json<{ updates: { old_str: string; new_str: string }[] }>()
   if (!body.updates?.length) return c.json({ error: "updates array is required" }, 400)
 
-  const result = await db.patchFile(c.env.DB, c.req.param("slug"), c.req.param("path"), body.updates)
+  const slug = c.req.param("slug")
+  const filePath = c.req.param("path")
+  const result = await db.patchFile(c.env.DB, slug, filePath, body.updates)
   if (!result) return c.json({ error: "Not found" }, 404)
+  if (result.applied > 0) {
+    // Refetch updated content for broadcast
+    const updated = await db.getFileBySlugAndPath(c.env.DB, slug, filePath)
+    if (updated) {
+      broadcastToRoom(c, slug, {
+        type: "file:updated", fileId: result.id, path: filePath, content: updated.content,
+      })
+    }
+  }
   if (result.failed > 0) return c.json(result, 207)
   return c.json(result)
 })
@@ -828,6 +868,14 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
     if (!body.body) return c.json({ error: "body is required" }, 400)
     const author = body.author || await anonName(ip)
     const reply = await db.addReply(c.env.DB, comment.commentId, body.body, author)
+
+    // Broadcast live update
+    broadcastToRoom(c, slug, {
+      type: "reply:created",
+      fileId: "", // resolved client-side via commentId
+      commentId: comment.commentId,
+      reply: { id: reply.id, body: body.body, author, createdAt: new Date().toISOString() },
+    })
 
     // Fire webhook
     const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
@@ -858,6 +906,16 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
     if (!file) return c.json({ error: "File not found" }, 404)
     const author = body.author || await anonName(ip)
     const result = await db.addComment(c.env.DB, file.id as string, body.anchor, body.body, author)
+
+    // Broadcast live update
+    broadcastToRoom(c, slug, {
+      type: "comment:created",
+      fileId: file.id,
+      comment: {
+        id: result.id, anchor: body.anchor, body: body.body,
+        author, createdAt: new Date().toISOString(), replies: [],
+      },
+    })
 
     // Fire webhook
     const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
@@ -895,12 +953,16 @@ app.delete("/~/public/:slug/:path{.+}", async (c) => {
   if (comment?.commentId) {
     // DELETE ~/public/:slug/:path/@comments/:id
     await db.deleteComment(c.env.DB, comment.commentId)
+    broadcastToRoom(c, slug, {
+      type: "comment:deleted", fileId: "", commentId: comment.commentId,
+    })
     return c.json({ ok: true })
   }
 
   // DELETE file
   const result = await db.deleteFile(c.env.DB, slug, path)
   if (!result) return c.json({ error: "Not found" }, 404)
+  broadcastToRoom(c, slug, { type: "file:deleted", fileId: result.id, path })
   return c.json(result)
 })
 
@@ -913,4 +975,5 @@ app.get("*", async (c) => {
   return c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
 })
 
+export { DocumentRoom } from "./room"
 export default app
