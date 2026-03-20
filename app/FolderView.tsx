@@ -202,10 +202,16 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
 
   const handleDeleteComment = async (commentId: string) => {
     if (!file) return
+    // Save for rollback
+    const prevComments = file.comments
     updateFileComments(file.id, comments => comments.filter(c => c.id !== commentId))
     // Only call server if it's a persisted comment (not a local draft)
     if (!commentId.startsWith("temp-")) {
-      await deleteComment(slug, file.path, commentId)
+      const result = await deleteComment(slug, file.path, commentId)
+      if (!result.ok) {
+        // Rollback on failure
+        updateFileComments(file.id, () => prevComments)
+      }
     }
   }
 
