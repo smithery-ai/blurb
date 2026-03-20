@@ -74,12 +74,8 @@ app.post("/~/public", async (c) => {
   return c.json(folder, 201)
 })
 
-// Create/replace folder with a specific slug (admin only)
+// Create/replace folder with a specific slug
 app.put("/~/public/:slug", async (c) => {
-  const token = c.env.ADMIN_TOKEN
-  const auth = c.req.header("authorization")?.replace("Bearer ", "")
-  if (!token || auth !== token) return c.json({ error: "Unauthorized" }, 401)
-
   const slug = c.req.param("slug")
   const body = await c.req.json<{
     title?: string

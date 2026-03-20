@@ -183,7 +183,7 @@ html, body, #root {
   font-weight: 300;
 }
 
-/* ─── Bonsai landing ───────────────────────────────────── */
+/* ─── Fern landing ─────────────────────────────────────── */
 
 .fern-landing {
   display: flex;
@@ -194,6 +194,52 @@ html, body, #root {
   gap: 16px;
 }
 
+.fern-landing.fern-with-title {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  height: 100%;
+}
+
+.fern-landing.fern-with-title .fern-info {
+  display: flex;
+  flex-direction: column;
+  padding-left: 48px;
+  height: 100%;
+}
+
+.fern-landing.fern-with-title .fern-info::before {
+  content: '';
+  flex: 1;
+}
+
+.fern-landing.fern-with-title .fern-info::after {
+  content: '';
+  flex: 3;
+}
+
+.fern-landing.fern-with-title .fern-plant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+}
+
+.fern-title {
+  font-size: 48px;
+  font-weight: 200;
+  letter-spacing: -0.02em;
+  margin-bottom: 12px;
+}
+
+.fern-description {
+  font-size: 16px;
+  font-weight: 300;
+  opacity: 0.4;
+  line-height: 1.6;
+  margin-top: 4px;
+}
+
 .fern-pre {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 10px;
@@ -202,17 +248,17 @@ html, body, #root {
   user-select: none;
 }
 
+.fern-plant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
 .fern-hash {
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 14px;
   opacity: 0.2;
   letter-spacing: 0.15em;
-}
-
-.fern-hint {
-  font-size: 13px;
-  opacity: 0.3;
-  font-weight: 300;
 }
 
 /* ─── Mobile sidebar toggle ─────────────────────────────── */

@@ -47,7 +47,7 @@ const CheckIcon = () => (
   </svg>
 )
 
-export default function FolderView({ slug, initialFile }: { slug: string; initialFile?: string }) {
+export default function FolderView({ slug, initialFile, landingDescription }: { slug: string; initialFile?: string; landingDescription?: string }) {
   const [folder, setFolder] = useState<Folder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -347,7 +347,12 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               onLinkClick={handleLinkClick}
             />
           ) : (
-            <Fern theme={theme} seed={folder ? hashStr(folder.files.map(f => f.path + f.content).join("")) : 0} />
+            <Fern
+              theme={theme}
+              seed={folder ? hashStr(folder.files.map(f => f.path + f.content).join("")) : 0}
+              title={folder?.title}
+              description={landingDescription}
+            />
           )}
         </div>
       </div>

@@ -198,7 +198,7 @@ const COLORS: Record<string, Record<CellType, string[]>> = {
   },
 }
 
-export default function Fern({ theme, seed = 0 }: { theme: "dark" | "light"; seed?: number }) {
+export default function Fern({ theme, seed = 0, title, description }: { theme: "dark" | "light"; seed?: number; title?: string; description?: string }) {
   const grid = useMemo(() => generateGarden(120, 55, seed), [seed])
   const colors = COLORS[theme]
   const preRef = useRef<HTMLPreElement>(null)
@@ -228,7 +228,14 @@ export default function Fern({ theme, seed = 0 }: { theme: "dark" | "light"; see
   }, [])
 
   return (
-    <div className="fern-landing">
+    <div className={`fern-landing${title ? " fern-with-title" : ""}`}>
+      {title && (
+        <div className="fern-info">
+          <h1 className="fern-title">{title}</h1>
+          {description && <p className="fern-description">{description}</p>}
+        </div>
+      )}
+      <div className="fern-plant">
       <pre className="fern-pre" ref={preRef} onMouseMove={handleMouseMove} onMouseLeave={handleMouseLeave}>
         {grid.map((row, r) => (
           <span key={r}>
@@ -266,7 +273,7 @@ export default function Fern({ theme, seed = 0 }: { theme: "dark" | "light"; see
         ))}
       </pre>
       <p className="fern-hash">[#{(seed >>> 0).toString(16).padStart(8, "0")}]</p>
-      <p className="fern-hint">select a file to get started</p>
+      </div>
     </div>
   )
 }
