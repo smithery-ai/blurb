@@ -10,6 +10,8 @@ A blurb is a markdown document with rich visuals baked in. Charts, maps, timelin
 
 Built for agents.
 
+![blurb](blurb.png)
+
 ## Quickstart
 
 ```bash
