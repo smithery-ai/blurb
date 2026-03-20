@@ -1,6 +1,6 @@
 # blurb
 
-A blurb is a markdown document with rich visuals baked in. Charts, maps, timelines, math, diagrams ship out of the box — and you can build your own widgets with a simple plugin interface. Publish with a single API call, share a link.
+Beautiful gists for your agent. Rich markdown with charts, maps, timelines, math, and diagrams — out of the box. Publish with a single API call, share a link, leave inline comments.
 
 Built for humans and agents.
 
