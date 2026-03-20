@@ -1,11 +1,18 @@
-// Static home folder served at /
-// This makes the landing page a Blurb folder, dogfooding the product.
-//
-// To update skill content: run `bun scripts/sync-home.ts`
+#!/usr/bin/env bun
+// Seeds the "blurb" home folder into the local DB via the admin PUT endpoint
+// Usage: bun scripts/seed-home.ts [base-url] [admin-token]
 
-import { SKILL_MD, WIDGET_SPEC_MD } from "./home-content"
+import { readFileSync } from "fs"
+import { join } from "path"
 
-const INDEX_MD = `# Blurb
+const root = join(import.meta.dir, "..")
+const baseUrl = process.argv[2] || "http://localhost:8787"
+const token = process.argv[3] || "dev-admin-token"
+
+const skill = readFileSync(join(root, ".claude/skills/blurb/SKILL.md"), "utf-8")
+const widgetSpec = readFileSync(join(root, ".claude/skills/blurb/references/widget-spec.md"), "utf-8")
+
+const readme = `# Blurb
 
 Share folders with inline comments.
 
@@ -82,32 +89,23 @@ Blurb ships as a Claude Code skill. Add it to your project and Claude can publis
 Browse the \`.claude/skills/\` folder in the sidebar to see the skill definition.
 `
 
-export const HOME_FOLDER = {
-  id: "home",
-  slug: "blurb",
+const body = {
   title: "Blurb",
-  createdAt: "2025-01-01T00:00:00Z",
   files: [
-    {
-      id: "home-index",
-      path: "README.md",
-      content: INDEX_MD,
-      language: null,
-      comments: [],
-    },
-    {
-      id: "home-skill",
-      path: ".claude/skills/blurb/SKILL.md",
-      content: SKILL_MD,
-      language: null,
-      comments: [],
-    },
-    {
-      id: "home-widget-spec",
-      path: ".claude/skills/blurb/references/widget-spec.md",
-      content: WIDGET_SPEC_MD,
-      language: null,
-      comments: [],
-    },
+    { path: "README.md", content: readme },
+    { path: ".claude/skills/blurb/SKILL.md", content: skill },
+    { path: ".claude/skills/blurb/references/widget-spec.md", content: widgetSpec },
   ],
 }
+
+const res = await fetch(`${baseUrl}/~/public/blurb`, {
+  method: "PUT",
+  headers: {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`,
+  },
+  body: JSON.stringify(body),
+})
+
+const data = await res.json()
+console.log(res.status, JSON.stringify(data, null, 2))

@@ -1,9 +1,9 @@
 import { Hono } from "hono"
 import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
-import { HOME_FOLDER } from "./home"
 
-type Bindings = { DB: D1Database; ASSETS: Fetcher }
+
+type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string }
 type HonoEnv = { Bindings: Bindings }
 
 const app = new Hono<HonoEnv>()
@@ -50,24 +50,9 @@ function parseCommentPath(raw: string) {
   }
 }
 
-// ─── Home folder (static) ────────────────────────────────────
+// ─── Home redirect ───────────────────────────────────────────
 
-app.get("/", async (c) => serveSPAWithData(c, HOME_FOLDER))
-
-app.get("/~/public/blurb", async (c) => {
-  const accept = c.req.header("accept") || ""
-  if (accept.includes("application/json")) return c.json(HOME_FOLDER)
-  return serveSPAWithData(c, HOME_FOLDER)
-})
-
-app.get("/~/public/blurb/:path{.+}", async (c) => {
-  const path = c.req.param("path")
-  const file = HOME_FOLDER.files.find((f: any) => f.path === path)
-  if (!file) return c.json({ error: "Not found" }, 404)
-  const accept = c.req.header("accept") || ""
-  if (accept.includes("application/json")) return c.json(file)
-  return serveSPAWithData(c, HOME_FOLDER)
-})
+app.get("/", (c) => c.redirect("/~/public/blurb"))
 
 // ─── Folder routes ──────────────────────────────────────────
 
@@ -87,6 +72,35 @@ app.post("/~/public", async (c) => {
   const slug = await uniqueSlug(c.env.DB)
   const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files)
   return c.json(folder, 201)
+})
+
+// Create/replace folder with a specific slug (admin only)
+app.put("/~/public/:slug", async (c) => {
+  const token = c.env.ADMIN_TOKEN
+  const auth = c.req.header("authorization")?.replace("Bearer ", "")
+  if (!token || auth !== token) return c.json({ error: "Unauthorized" }, 401)
+
+  const slug = c.req.param("slug")
+  const body = await c.req.json<{
+    title?: string
+    files: { path: string; content: string }[]
+  }>()
+
+  if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  for (const f of body.files) {
+    const err = db.validatePath(f.path)
+    if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
+  }
+
+  // Delete existing folder if present, then recreate with same slug
+  const existing = await db.getFolder(c.env.DB, slug)
+  if (existing) {
+    await c.env.DB.prepare("DELETE FROM folders WHERE slug = ?").bind(slug).run()
+  }
+
+  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files)
+  return c.json(folder, existing ? 200 : 201)
 })
 
 app.get("/~/public/:slug", async (c) => {

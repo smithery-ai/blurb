@@ -4,3 +4,4 @@ dist/
 *.skill
 .debug/
 skills-lock.json
+.dev.vars

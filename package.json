@@ -5,9 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "sync-home": "bun scripts/sync-home.ts",
-    "build": "bun scripts/sync-home.ts && vite build",
-    "deploy": "bun scripts/sync-home.ts && vite build && wrangler deploy",
+    "seed-home": "bun scripts/seed-home.ts",
+    "build": "vite build",
+    "deploy": "vite build && wrangler deploy",
     "test": "vitest run",
     "test:watch": "vitest",
     "db:migrate": "wrangler d1 migrations apply sono-worker-db --local",
