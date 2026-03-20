@@ -109,15 +109,17 @@ https://blurb.md/~/public/{slug}
 
 ## Available Widgets
 
-### Charts (`widget` code block)
+### Charts (`chart` code block)
 
 Bar, line, pie, doughnut, radar, polar area, scatter, bubble — powered by Chart.js.
 
 ````markdown
-```widget
-{"widgetId":"rev","type":"chart","config":{"type":"bar","data":{"labels":["Q1","Q2","Q3"],"datasets":[{"label":"Revenue","data":[2.4,3.1,3.8]}]}}}
+```chart
+{"config":{"type":"bar","data":{"labels":["Q1","Q2","Q3"],"datasets":[{"label":"Revenue","data":[2.4,3.1,3.8]}]}}}
 ```
 ````
+
+Also works via `` ```widget `` with explicit `"type":"chart"` and `"widgetId"`, but `` ```chart `` is simpler.
 
 ### Mermaid Diagrams (`mermaid` code block)
 
@@ -205,6 +207,35 @@ Syntax-highlighted code diffs.
 ```
 ````
 
+### HTML (`html` code block)
+
+Render custom HTML/CSS/SVG directly — no iframe, no predefined structure. DOMPurify strips scripts and event handlers; `<style>` blocks are auto-scoped to the widget so CSS doesn't leak.
+
+````markdown
+```html
+<style>
+  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .metric-card { padding: 16px; border-radius: 8px; background: rgba(193, 95, 60, 0.08); border: 1px solid rgba(193, 95, 60, 0.15); }
+  .metric-value { font-size: 1.8em; font-weight: 700; color: #C15F3C; }
+  .metric-label { font-size: 0.85em; opacity: 0.6; margin-top: 4px; }
+</style>
+<div class="metric-grid">
+  <div class="metric-card">
+    <div class="metric-value">12.4k</div>
+    <div class="metric-label">Monthly Active Users</div>
+  </div>
+  <div class="metric-card">
+    <div class="metric-value">98.2%</div>
+    <div class="metric-label">Uptime</div>
+  </div>
+</div>
+```
+````
+
+Good for: custom layouts, inline SVG, styled cards, anything the predefined widgets don't cover. No JavaScript — use the `html-app` widget (sandboxed iframe) if you need interactivity.
+
+Forbidden tags: `script`, `iframe`, `object`, `embed`, `form`, `input`, `textarea`, `button`, `select`.
+
 ### Sketches (`sketch` code block)
 
 Hand-drawn diagrams via Rough.js. Elements: `rect`, `ellipse`, `line`, `arrow`, `text`.
@@ -243,7 +274,7 @@ Vector search is standard[^1]. Hybrid methods outperform[^2].
 - Multi-file artifacts show a collapsible tree sidebar
 - Keep `widgetId` unique within a document (for chart widgets)
 - Colors auto-assign from the engei palette — only specify when needed
-- **Chart widget uses `widget` code blocks** — NOT `json:widget` or `chart`. Other widgets use their own lang: `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`, `globe`, `diff`
+- **All widgets have their own code block lang**: `chart`, `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`, `globe`, `diff`, `html`. Prefer the named lang — it auto-injects `widgetId` and `type`. The generic `` ```widget `` block also works for any widget but requires explicit `"widgetId"` and `"type"` in the JSON
 - **Pie/doughnut charts need explicit `backgroundColor`** on datasets or all slices render the same color
 - **Map `center` is respected** — if you set `center` and `zoom`, the map won't auto-fit to markers. Omit `center` to auto-fit
 - **Mermaid gotchas**: No backticks in labels, no special chars (`→`) in messages, no curly braces `{}` in message labels (breaks v11 parser), use `#quot;` for quotes

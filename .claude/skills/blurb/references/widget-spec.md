@@ -326,6 +326,31 @@ Use `globe` fenced code blocks. Interactive WebGL globe via COBE.
 }
 ```
 
+## HTML widget
+
+Use `html` fenced code blocks. Renders sanitized HTML/CSS/SVG directly in the document (no iframe). Scripts and event handlers are stripped by DOMPurify. `<style>` blocks are extracted and scoped to the widget automatically.
+
+````markdown
+```html
+<style>
+  .card { padding: 20px; border-radius: 12px; background: linear-gradient(135deg, rgba(193, 95, 60, 0.1), rgba(193, 95, 60, 0.05)); }
+</style>
+<div class="card">
+  <svg width="80" height="80" viewBox="0 0 80 80">
+    <circle cx="40" cy="40" r="35" fill="none" stroke="#C15F3C" stroke-width="3"/>
+  </svg>
+  <h3>Custom Content</h3>
+</div>
+```
+````
+
+- Full HTML, CSS, and SVG support — no JavaScript
+- `<style>` blocks are auto-scoped (CSS won't leak to the page)
+- Forbidden tags: `script`, `iframe`, `object`, `embed`, `form`, `input`, `textarea`, `button`, `select`
+- Forbidden attributes: all `on*` event handlers (`onclick`, `onerror`, etc.)
+- Theme-aware: text color adapts to dark/light mode
+- Use for: custom layouts, metric cards, styled callouts, inline SVG illustrations, anything predefined widgets don't cover
+
 ## Rules
 
 - `widgetId` must be unique within the document (for chart widgets)
