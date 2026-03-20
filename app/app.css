@@ -17,6 +17,7 @@ html, body, #root {
   display: grid;
   grid-template-columns: 240px 1fr;
   height: 100%;
+  overflow: hidden;
   transition: grid-template-columns 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -31,7 +32,8 @@ html, body, #root {
 
 .folder-sidebar {
   position: relative;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
   border-right: 1px solid var(--widget-border, #3a3530);
   display: flex;
   flex-direction: column;
@@ -86,6 +88,7 @@ html, body, #root {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  overflow-y: auto;
 }
 
 .folder-header {
