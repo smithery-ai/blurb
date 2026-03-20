@@ -665,7 +665,11 @@ app.put("/~/public/:slug", async (c) => {
 app.get("/~/public/:slug", async (c) => {
   const accept = c.req.header("accept") || ""
   const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
-  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  if (!folder) {
+    if (accept.includes("application/json")) return c.json({ error: "Not found" }, 404)
+    return serveSPA(c)
+  }
 
   if (accept.includes("application/json")) {
     c.header("Cache-Control", "public, s-maxage=60, stale-while-revalidate=300")

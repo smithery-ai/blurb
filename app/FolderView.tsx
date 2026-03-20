@@ -3,7 +3,7 @@ import { Editor, FileTree, useFileTreeStore, getDefaultWidgets } from "engei"
 import type { Anchor, Comment, TreeFile } from "engei"
 
 const widgets = getDefaultWidgets()
-import { fetchFolder, postComment, deleteComment, postReply } from "./api"
+import { fetchFolder, postComment, postReply } from "./api"
 import Fern, { hashStr } from "./Fern"
 import ShareModal from "./ShareModal"
 
@@ -125,7 +125,7 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
   }, [])
 
   if (loading) return <div className="loading">Loading...</div>
-  if (error || !folder) return <div className="error">{error || "Not found"}</div>
+  if (error || !folder) return <Fern theme={theme} seed={hashStr(slug)} title="404" description="This blurb doesn't exist — or maybe it wandered off." />
 
   const file = folder.files.find(f => f.path === activePath)
   const treeFiles: TreeFile[] = folder.files.map(f => ({ id: f.id, path: f.path }))
@@ -215,20 +215,7 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
     }
   }
 
-  const handleDeleteComment = async (commentId: string) => {
-    if (!file) return
-    // Save for rollback
-    const prevComments = file.comments
-    updateFileComments(file.id, comments => comments.filter(c => c.id !== commentId))
-    // Only call server if it's a persisted comment (not a local draft)
-    if (!commentId.startsWith("temp-")) {
-      const result = await deleteComment(slug, file.path, commentId)
-      if (!result.ok) {
-        // Rollback on failure
-        updateFileComments(file.id, () => prevComments)
-      }
-    }
-  }
+
 
   const handleAddReply = async (commentId: string, body: string) => {
     if (!file) return
@@ -362,7 +349,6 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               widgets={widgets}
               onCreateComment={handleCreateComment}
               onUpdateComment={handleUpdateComment}
-              onDeleteComment={handleDeleteComment}
               onAddReply={handleAddReply}
               onLinkClick={handleLinkClick}
             />
