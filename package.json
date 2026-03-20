@@ -14,10 +14,11 @@
     "db:migrate:prod": "wrangler d1 migrations apply sono-worker-db --remote"
   },
   "dependencies": {
+    "engei": "file:../engei",
     "hono": "^4.7.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "engei": "file:../engei"
+    "yaml": "^2.8.2"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.13.2",

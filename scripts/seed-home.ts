@@ -98,7 +98,7 @@ Full API docs in [SKILL.md](.claude/skills/blurb/SKILL.md).
 const body = {
   title: "Blurb",
   description: "Beautiful collaborative gists for humans and agents. Check out the [readme](https://blurb.md/~/public/blurb/README.md)",
-  command: "npx skills add smithery-ai/blurb",
+  command: "npx skills add https://blurb.md",
   files: [
     { path: "README.md", content: readme },
     { path: ".claude/skills/blurb/SKILL.md", content: skill },

@@ -2,6 +2,7 @@ import { Hono } from "hono"
 import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
 import { hashStr, renderFernSVG } from "../lib/fern-core"
+import YAML from "yaml"
 
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string }
@@ -66,6 +67,91 @@ function parseCommentPath(raw: string) {
     isReplies: parts[1] === "replies",
   }
 }
+
+// ─── Well-known skills discovery (RFC 8615) ─────────────────
+// Per-folder: /~/public/:slug/.well-known/skills/index.json
+// Also exposed at root for the "blurb" home folder
+
+/** Parse YAML frontmatter name/description from SKILL.md content */
+function parseSkillFrontmatter(content: string): { name: string; description: string } | null {
+  const match = content.match(/^---\n([\s\S]*?)\n---/)
+  if (!match) return null
+  try {
+    const fm = YAML.parse(match[1])
+    if (!fm?.name || !fm?.description) return null
+    return { name: fm.name, description: fm.description }
+  } catch {
+    return null
+  }
+}
+
+/** Build well-known skills index + file map from a folder's files */
+function buildSkillsFromFolder(files: { path: string; content: string }[]) {
+  // Find all SKILL.md files
+  const skillFiles = files.filter(f => f.path.endsWith("/SKILL.md") || f.path === "SKILL.md")
+  const skills: { name: string; description: string; files: string[]; dir: string }[] = []
+
+  for (const sf of skillFiles) {
+    const fm = parseSkillFrontmatter(sf.content)
+    if (!fm) continue
+
+    // Skill dir is the parent of SKILL.md
+    const dir = sf.path.includes("/") ? sf.path.replace(/\/SKILL\.md$/, "") : ""
+    const prefix = dir ? `${dir}/` : ""
+
+    // Collect all files under this skill dir, relative to it
+    const relFiles = files
+      .filter(f => f.path === sf.path || (prefix && f.path.startsWith(prefix) && f.path !== sf.path))
+      .map(f => prefix ? f.path.slice(prefix.length) : f.path)
+
+    skills.push({ name: fm.name, description: fm.description, files: relFiles, dir })
+  }
+
+  return skills
+}
+
+// Per-folder well-known: /~/public/:slug/.well-known/skills/index.json
+app.get("/~/public/:slug/.well-known/skills/index.json", async (c) => {
+  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  const skills = buildSkillsFromFolder(folder.files)
+  return c.json(
+    { skills: skills.map(s => ({ name: s.name, description: s.description, files: s.files })) },
+    200,
+    { "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
+  )
+})
+
+// Per-folder well-known: /~/public/:slug/.well-known/skills/:skill/:path
+app.get("/~/public/:slug/.well-known/skills/:skill/:path{.+}", async (c) => {
+  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  const skillName = c.req.param("skill")
+  const filePath = c.req.param("path")
+  const skills = buildSkillsFromFolder(folder.files)
+  const skill = skills.find(s => s.name === skillName)
+  if (!skill) return c.text("Not found", 404)
+
+  const fullPath = skill.dir ? `${skill.dir}/${filePath}` : filePath
+  const file = folder.files.find((f: any) => f.path === fullPath)
+  if (!file) return c.text("Not found", 404)
+
+  const ct = filePath.endsWith(".json") ? "application/json" : "text/markdown"
+  return new Response(file.content, {
+    headers: { "Content-Type": ct, "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400" },
+  })
+})
+
+// Root well-known aliases to the "blurb" home folder
+app.get("/.well-known/skills/index.json", async (c) => {
+  return c.redirect(`/~/public/blurb/.well-known/skills/index.json`, 302)
+})
+
+app.get("/.well-known/skills/:skill/:path{.+}", async (c) => {
+  return c.redirect(`/~/public/blurb/.well-known/skills/${c.req.param("skill")}/${c.req.param("path")}`, 302)
+})
 
 // ─── Home redirect ───────────────────────────────────────────
 
