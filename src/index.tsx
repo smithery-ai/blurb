@@ -32,7 +32,7 @@ async function serveSPAWithData(c: any, data: any) {
   const ogTags = data.slug ? `
     <meta property="og:title" content="${escapeHtml(data.title || "Blurb")}" />
     <meta property="og:description" content="${escapeHtml((data.description || "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1"))}" />
-    <meta property="og:image" content="${url.origin}/~/public/${data.slug}/og.svg" />
+    <meta property="og:image" content="${url.origin}/~/public/${data.slug}/og.png" />
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
     <meta property="og:type" content="website" />
@@ -257,6 +257,28 @@ app.get("/~/public/:slug/og.svg", async (c) => {
     headers: {
       "Content-Type": "image/svg+xml",
       "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+    },
+  })
+})
+
+app.get("/~/public/:slug/og.png", async (c) => {
+  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  const seed = hashStr(folder.files.map((f: any) => f.path + f.content).join(""))
+  const svg = renderFernSVG({
+    seed,
+    title: folder.title,
+    description: folder.description,
+  })
+
+  const { svgToPng } = await import("./resvg")
+  const png = await svgToPng(svg, 1200)
+
+  return new Response(png as unknown as ArrayBuffer, {
+    headers: {
+      "Content-Type": "image/png",
+      "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800",
     },
   })
 })

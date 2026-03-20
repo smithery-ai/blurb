@@ -14,6 +14,7 @@
     "db:migrate:prod": "wrangler d1 migrations apply sono-worker-db --remote"
   },
   "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
     "engei": "file:../engei",
     "hono": "^4.7.0",
     "react": "^19.1.0",
