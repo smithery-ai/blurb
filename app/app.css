@@ -150,6 +150,20 @@ html, body, #root {
   min-height: 0;
 }
 
+.editor-wrap .cm-scroller {
+  padding-top: 8px;
+  padding-bottom: 32px;
+}
+
+.editor-wrap .cm-content {
+  padding-right: 48px;
+  max-width: calc(760px + 48px);
+}
+
+.editor-wrap .cm-gutters {
+  padding-left: 48px;
+}
+
 .editor-wrap .md-preview {
   padding-top: 8px;
 }
@@ -166,6 +180,31 @@ html, body, #root {
 
 .home h1 {
   font-size: 24px;
+  font-weight: 300;
+}
+
+/* ─── Bonsai landing ───────────────────────────────────── */
+
+.bonsai-landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 16px;
+}
+
+.bonsai-pre {
+  font-family: "SF Mono", "Menlo", "Consolas", monospace;
+  font-size: 10px;
+  line-height: 1.1;
+  letter-spacing: 0;
+  user-select: none;
+}
+
+.bonsai-hint {
+  font-size: 13px;
+  opacity: 0.3;
   font-weight: 300;
 }
 

@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client"
 import FolderView from "./FolderView"
+import Bonsai from "./Bonsai"
 import "engei/styles"
 import "./app.css"
 
@@ -7,12 +8,7 @@ function App() {
   const path = window.location.pathname.replace(/^\//, "").replace(/\/$/, "")
 
   if (!path || !path.startsWith("~/public/")) {
-    return (
-      <div className="home">
-        <h1>Sono</h1>
-        <p>Share folders with inline comments.</p>
-      </div>
-    )
+    return <FolderView slug="blurb" landing={(theme) => <Bonsai theme={theme} />} />
   }
 
   const rest = path.replace(/^~\/public\//, "")

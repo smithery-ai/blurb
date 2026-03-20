@@ -46,7 +46,7 @@ const CheckIcon = () => (
   </svg>
 )
 
-export default function FolderView({ slug, initialFile }: { slug: string; initialFile?: string }) {
+export default function FolderView({ slug, initialFile, landing }: { slug: string; initialFile?: string; landing?: (theme: "dark" | "light") => React.ReactNode }) {
   const [folder, setFolder] = useState<Folder | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -65,8 +65,8 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
       setError("Folder not found")
     } else {
       setFolder(data)
-      // Auto-select first file if none selected (functional update avoids stale closure)
-      if (!activePath && data.files.length > 0) navigate(data.files[0].path)
+      // Auto-select first file if none selected (skip when landing page is shown)
+      if (!landing && !activePath && data.files.length > 0) navigate(data.files[0].path)
     }
     setLoading(false)
   }, [slug])
@@ -345,6 +345,8 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               onAddReply={handleAddReply}
               onLinkClick={handleLinkClick}
             />
+          ) : landing ? (
+            landing(theme)
           ) : (
             <div className="error">Select a file</div>
           )}

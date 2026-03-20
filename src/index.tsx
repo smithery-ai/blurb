@@ -1,6 +1,7 @@
 import { Hono } from "hono"
 import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
+import { HOME_FOLDER } from "./home"
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher }
 type HonoEnv = { Bindings: Bindings }
@@ -48,6 +49,25 @@ function parseCommentPath(raw: string) {
     isReplies: parts[1] === "replies",
   }
 }
+
+// ─── Home folder (static) ────────────────────────────────────
+
+app.get("/", async (c) => serveSPAWithData(c, HOME_FOLDER))
+
+app.get("/~/public/blurb", async (c) => {
+  const accept = c.req.header("accept") || ""
+  if (accept.includes("application/json")) return c.json(HOME_FOLDER)
+  return serveSPAWithData(c, HOME_FOLDER)
+})
+
+app.get("/~/public/blurb/:path{.+}", async (c) => {
+  const path = c.req.param("path")
+  const file = HOME_FOLDER.files.find((f: any) => f.path === path)
+  if (!file) return c.json({ error: "Not found" }, 404)
+  const accept = c.req.header("accept") || ""
+  if (accept.includes("application/json")) return c.json(file)
+  return serveSPAWithData(c, HOME_FOLDER)
+})
 
 // ─── Folder routes ──────────────────────────────────────────
 
