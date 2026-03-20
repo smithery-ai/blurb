@@ -5,7 +5,7 @@ import { hashStr, renderFernSVG } from "../lib/fern-core"
 import YAML from "yaml"
 
 
-type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string }
+type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string; ROOMS: DurableObjectNamespace }
 type HonoEnv = { Bindings: Bindings }
 
 /** Validate webhook URL — must be HTTPS (or HTTP localhost in dev). Blocks SSRF. */
@@ -581,10 +581,29 @@ app.post("/~/public", async (c) => {
     tokenHash,
     webhookUrl,
   })
+  const url = new URL(c.req.url)
+  const base = url.origin
   return c.json({
     ...folder,
     token,
-    ...(hook ? { hook: { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token } } : {}),
+    url: `${base}/~/public/${slug}`,
+    api: {
+      get: `${base}/~/public/${slug}`,
+      edit: `curl -X PATCH ${base}/~/public/${slug}/{file} -H "Authorization: Bearer ${token}" -H "Content-Type: application/json" -d '{"updates":[{"old_str":"...","new_str":"..."}]}'`,
+    },
+    ...(hook ? {
+      hook: {
+        hook_id: hook.hook_id,
+        ingest_url: hook.ingest_url,
+        manage_url: hook.manage_url,
+        manage_token: hook.manage_token,
+        instructions: [
+          "Comments and replies on this folder will be sent to hook.new automatically.",
+          `To listen: create a watch sink with: curl -X POST ${hook.manage_url}/sinks -H "Authorization: Bearer ${hook.manage_token}" -H "Content-Type: application/json" -d '{"kind":"watch","mode":"observe","timeoutMs":120000}'`,
+          "Then open the returned stream_url with the watch_token to receive events via SSE.",
+        ],
+      },
+    } : {}),
   }, 201)
 })
 
@@ -812,17 +831,23 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
 
     // Fire webhook
     const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
+    const url = new URL(c.req.url)
+    const base = url.origin
     if (webhookUrl) {
       safeWaitUntil(c, fireWebhook(webhookUrl, {
         event: "reply.created",
         slug,
         file: comment.filePath,
+        url: `${base}/~/public/${slug}/${comment.filePath}`,
         comment_id: comment.commentId,
         reply: { id: reply.id, body: body.body, author },
       }))
     }
 
-    return c.json(reply, 201)
+    return c.json({
+      ...reply,
+      reply_to: `${base}/~/public/${slug}/${comment.filePath}/@comments/${comment.commentId}`,
+    }, 201)
   }
 
   if (!comment.commentId) {
@@ -836,16 +861,24 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
 
     // Fire webhook
     const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
+    const curl = new URL(c.req.url)
+    const cbase = curl.origin
     if (webhookUrl) {
       safeWaitUntil(c, fireWebhook(webhookUrl, {
         event: "comment.created",
         slug,
         file: comment.filePath,
+        url: `${cbase}/~/public/${slug}/${comment.filePath}`,
         comment: { id: result.id, anchor: body.anchor, body: body.body, author },
+        reply_url: `${cbase}/~/public/${slug}/${comment.filePath}/@comments/${result.id}/replies`,
       }))
     }
 
-    return c.json(result, 201)
+    return c.json({
+      ...result,
+      url: `${cbase}/~/public/${slug}/${comment.filePath}/@comments/${result.id}`,
+      reply: `curl -X POST ${cbase}/~/public/${slug}/${comment.filePath}/@comments/${result.id}/replies -H "Content-Type: application/json" -d '{"body":"...","author":"Agent"}'`,
+    }, 201)
   }
 
   return c.json({ error: "Not found" }, 404)
