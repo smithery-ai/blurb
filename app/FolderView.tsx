@@ -84,9 +84,13 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
 
   useEffect(() => { load() }, [load])
 
-  const navigate = useCallback((path: string) => {
+  useEffect(() => {
+    document.title = folder?.title ? `${folder.title} — Blurb` : "Blurb"
+  }, [folder?.title])
+
+  const navigate = useCallback((path: string | null) => {
     setActivePath(path)
-    window.history.replaceState(null, "", `/~/public/${slug}/${path}`)
+    window.history.replaceState(null, "", path ? `/~/public/${slug}/${path}` : `/~/public/${slug}`)
   }, [slug])
 
   // Persist theme choice and sync CSS variables
@@ -131,13 +135,13 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
   // Each segment has a label and optional nav target (path to navigate to)
   // ~ and public are inert; slug navigates to first file; path segments navigate into dirs
   const breadcrumb = (() => {
-    if (!activePath) return null
+    if (!activePath) return [{ label: "~" }, { label: "public" }, { label: slug }]
     const pathParts = activePath.split("/")
     // Build full segments with nav targets
     const all: { label: string; nav?: string }[] = [
       { label: "~" },
       { label: "public" },
-      { label: slug, nav: folder.files[0]?.path },
+      { label: slug, nav: "" },
     ]
     // Add directory segments — clicking navigates to first file under that prefix
     for (let i = 0; i < pathParts.length - 1; i++) {
@@ -311,8 +315,8 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               {breadcrumb.map((seg, i) => (
                 <span key={i}>
                   {i > 0 && <span className="breadcrumb-sep">/</span>}
-                  {seg.nav ? (
-                    <a className="breadcrumb-link" onClick={() => navigate(seg.nav!)}>{seg.label}</a>
+                  {seg.nav != null ? (
+                    <a className="breadcrumb-link" onClick={() => navigate(seg.nav || null)}>{seg.label}</a>
                   ) : (
                     <span>{seg.label}</span>
                   )}

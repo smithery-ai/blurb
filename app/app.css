@@ -33,6 +33,16 @@ html, body, #root {
   position: relative;
   overflow: hidden;
   border-right: 1px solid var(--widget-border, #3a3530);
+  display: flex;
+  flex-direction: column;
+}
+
+.folder-sidebar .koen-file-tree {
+  scrollbar-width: none;
+}
+
+.folder-sidebar .koen-file-tree::-webkit-scrollbar {
+  display: none;
 }
 
 /* Inner content stays at fixed width — text never reflows */

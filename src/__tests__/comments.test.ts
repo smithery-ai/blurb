@@ -19,7 +19,7 @@ async function createTestFolder() {
       files: [{ path: "readme.md", content: "# Hello\n\nSome **bold** text here." }],
     }),
   })
-  return res.json() as Promise<{ slug: string }>
+  return res.json() as Promise<{ slug: string; token: string }>
 }
 
 async function getFolder(slug: string) {
@@ -94,7 +94,7 @@ describe("comment lifecycle", () => {
   })
 
   it("delete → fetch → gone", async () => {
-    const { slug } = await createTestFolder()
+    const { slug, token } = await createTestFolder()
 
     const createRes = await request(`/~/public/${slug}/readme.md/@comments`, {
       method: "POST",
@@ -106,6 +106,7 @@ describe("comment lifecycle", () => {
     // Delete
     const deleteRes = await request(`/~/public/${slug}/readme.md/@comments/${commentId}`, {
       method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` },
     })
     expect(deleteRes.status).toBe(200)
 
@@ -116,7 +117,7 @@ describe("comment lifecycle", () => {
   })
 
   it("delete cascades replies", async () => {
-    const { slug } = await createTestFolder()
+    const { slug, token } = await createTestFolder()
 
     const createRes = await request(`/~/public/${slug}/readme.md/@comments`, {
       method: "POST",
@@ -131,7 +132,10 @@ describe("comment lifecycle", () => {
       body: JSON.stringify({ body: "Reply", author: "Bob" }),
     })
 
-    await request(`/~/public/${slug}/readme.md/@comments/${commentId}`, { method: "DELETE" })
+    await request(`/~/public/${slug}/readme.md/@comments/${commentId}`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` },
+    })
 
     const folder = await getFolder(slug)
     const file = folder.files.find((f: any) => f.path === "readme.md")

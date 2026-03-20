@@ -26,13 +26,13 @@ export async function fetchFolder(slug: string) {
   return res.json()
 }
 
-export async function createFolder(title: string, files: { path: string; content: string }[]) {
+export async function createFolder(title: string, files: { path: string; content: string }[], token?: string) {
   const res = await fetch("/~/public", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ title, files }),
+    body: JSON.stringify({ title, files, token }),
   })
-  return res.json()
+  return res.json() as Promise<{ id: string; slug: string; token: string }>
 }
 
 export async function postComment(slug: string, path: string, anchor: Anchor, body: string, author?: string): Promise<ApiResult<{ id: string }>> {

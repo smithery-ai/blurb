@@ -126,18 +126,23 @@ export function validateLanding(description?: string, command?: string): string 
   return null
 }
 
+export async function getFolderTokenHash(db: DB, slug: string): Promise<{ id: string; tokenHash: string | null } | null> {
+  const row = await db.prepare("SELECT id, token_hash FROM folders WHERE slug = ?").bind(slug).first() as any
+  return row ? { id: row.id, tokenHash: row.token_hash } : null
+}
+
 export async function createFolder(
   db: DB,
   slug: string,
   title: string,
   files: { path: string; content: string }[],
-  opts?: { description?: string; command?: string },
+  opts?: { description?: string; command?: string; tokenHash?: string },
 ) {
   const folderId = id()
 
   const stmts = [
-    db.prepare("INSERT INTO folders (id, slug, title, description, command) VALUES (?, ?, ?, ?, ?)")
-      .bind(folderId, slug, title, opts?.description || null, opts?.command || null),
+    db.prepare("INSERT INTO folders (id, slug, title, description, command, token_hash) VALUES (?, ?, ?, ?, ?, ?)")
+      .bind(folderId, slug, title, opts?.description || null, opts?.command || null, opts?.tokenHash || null),
     ...files.map((f, i) =>
       db.prepare(
         "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"

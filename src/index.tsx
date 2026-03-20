@@ -153,6 +153,42 @@ app.get("/.well-known/skills/:skill/:path{.+}", async (c) => {
   return c.redirect(`/~/public/blurb/.well-known/skills/${c.req.param("skill")}/${c.req.param("path")}`, 302)
 })
 
+// ─── Auth helpers ────────────────────────────────────────────
+
+async function hashToken(token: string): Promise<string> {
+  const data = new TextEncoder().encode(token)
+  const hash = await crypto.subtle.digest("SHA-256", data)
+  return [...new Uint8Array(hash)].map(b => b.toString(16).padStart(2, "0")).join("")
+}
+
+function generateToken(): string {
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("")
+}
+
+/** Check Authorization header against folder's token_hash or ADMIN_TOKEN. Returns error response or null if authorized. */
+async function requireFolderAuth(c: any, slug: string): Promise<Response | null> {
+  const auth = c.req.header("authorization") || ""
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : ""
+
+  if (!bearer) return c.json({ error: "Authorization required" }, 401)
+
+  // Superuser: ADMIN_TOKEN
+  if (c.env.ADMIN_TOKEN && bearer === c.env.ADMIN_TOKEN) return null
+
+  const folder = await db.getFolderTokenHash(c.env.DB, slug)
+  if (!folder) return c.json({ error: "Not found" }, 404)
+
+  // Legacy folder with no token — only ADMIN_TOKEN can mutate
+  if (!folder.tokenHash) return c.json({ error: "Forbidden" }, 403)
+
+  const hash = await hashToken(bearer)
+  if (hash !== folder.tokenHash) return c.json({ error: "Forbidden" }, 403)
+
+  return null
+}
+
 // ─── Home redirect ───────────────────────────────────────────
 
 app.get("/", (c) => c.redirect("/~/public/blurb"))
@@ -164,6 +200,7 @@ app.post("/~/public", async (c) => {
     title?: string
     description?: string
     command?: string
+    token?: string
     files: { path: string; content: string }[]
   }>()
 
@@ -177,12 +214,16 @@ app.post("/~/public", async (c) => {
     if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
   }
 
+  if (body.token && body.token.length < 32) return c.json({ error: "token must be at least 32 characters" }, 400)
+  const token = body.token || generateToken()
+  const tokenHash = await hashToken(token)
   const slug = await uniqueSlug(c.env.DB)
   const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
     description: body.description,
     command: body.command,
+    tokenHash,
   })
-  return c.json(folder, 201)
+  return c.json({ ...folder, token }, 201)
 })
 
 // Create/replace folder with a specific slug
@@ -192,6 +233,7 @@ app.put("/~/public/:slug", async (c) => {
     title?: string
     description?: string
     command?: string
+    token?: string
     files: { path: string; content: string }[]
   }>()
 
@@ -205,27 +247,44 @@ app.put("/~/public/:slug", async (c) => {
     if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
   }
 
-  // Delete existing folder if present, then recreate with same slug
-  const existing = await db.getFolder(c.env.DB, slug)
-  if (existing) {
+  // Check if folder exists — if so, require auth to replace
+  const existingMeta = await db.getFolderTokenHash(c.env.DB, slug)
+  if (existingMeta) {
+    const authErr = await requireFolderAuth(c, slug)
+    if (authErr) return authErr
+
     // Must delete in order: replies → comments → files → folder (no CASCADE)
     await c.env.DB.prepare(`
       DELETE FROM replies WHERE comment_id IN (
         SELECT c.id FROM comments c JOIN files f ON c.file_id = f.id WHERE f.folder_id = ?
-      )`).bind(existing.id).run()
+      )`).bind(existingMeta.id).run()
     await c.env.DB.prepare(`
       DELETE FROM comments WHERE file_id IN (
         SELECT id FROM files WHERE folder_id = ?
-      )`).bind(existing.id).run()
-    await c.env.DB.prepare("DELETE FROM files WHERE folder_id = ?").bind(existing.id).run()
-    await c.env.DB.prepare("DELETE FROM folders WHERE id = ?").bind(existing.id).run()
+      )`).bind(existingMeta.id).run()
+    await c.env.DB.prepare("DELETE FROM files WHERE folder_id = ?").bind(existingMeta.id).run()
+    await c.env.DB.prepare("DELETE FROM folders WHERE id = ?").bind(existingMeta.id).run()
+  }
+
+  // For new folders: generate token. For replacements: preserve existing token_hash.
+  let tokenHash: string | undefined
+  let returnToken: string | undefined
+  if (existingMeta) {
+    tokenHash = existingMeta.tokenHash || undefined
+  } else {
+    if (body.token && body.token.length < 32) return c.json({ error: "token must be at least 32 characters" }, 400)
+    const token = body.token || generateToken()
+    tokenHash = await hashToken(token)
+    returnToken = token
   }
 
   const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
     description: body.description,
     command: body.command,
+    tokenHash,
   })
-  return c.json(folder, existing ? 200 : 201)
+  const result = returnToken ? { ...folder, token: returnToken } : folder
+  return c.json(result, existingMeta ? 200 : 201)
 })
 
 app.get("/~/public/:slug", async (c) => {
@@ -329,6 +388,9 @@ app.get("/~/public/:slug/:path{.+}", async (c) => {
 })
 
 app.put("/~/public/:slug/:path{.+}", async (c) => {
+  const authErr = await requireFolderAuth(c, c.req.param("slug"))
+  if (authErr) return authErr
+
   const body = await c.req.json<{ content: string }>()
   if (!body.content && body.content !== "") return c.json({ error: "content is required" }, 400)
 
@@ -342,6 +404,9 @@ app.put("/~/public/:slug/:path{.+}", async (c) => {
 })
 
 app.patch("/~/public/:slug/:path{.+}", async (c) => {
+  const authErr = await requireFolderAuth(c, c.req.param("slug"))
+  if (authErr) return authErr
+
   const body = await c.req.json<{ updates: { old_str: string; new_str: string }[] }>()
   if (!body.updates?.length) return c.json({ error: "updates array is required" }, 400)
 
@@ -384,6 +449,9 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
 
 app.delete("/~/public/:slug/:path{.+}", async (c) => {
   const slug = c.req.param("slug")
+  const authErr = await requireFolderAuth(c, slug)
+  if (authErr) return authErr
+
   const path = c.req.param("path")
   const comment = parseCommentPath(path)
 

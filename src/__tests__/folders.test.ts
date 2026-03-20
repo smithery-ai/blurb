@@ -58,11 +58,11 @@ describe("file operations", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Test", files: [{ path: "a.md", content: "original" }] }),
     })
-    const { slug } = await createRes.json() as { slug: string }
+    const { slug, token } = await createRes.json() as { slug: string; token: string }
 
     const putRes = await request(`/~/public/${slug}/new-file.ts`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ content: "const x = 1" }),
     })
     expect(putRes.status).toBe(201)
@@ -79,11 +79,11 @@ describe("file operations", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Test", files: [{ path: "a.md", content: "original" }] }),
     })
-    const { slug } = await createRes.json() as { slug: string }
+    const { slug, token } = await createRes.json() as { slug: string; token: string }
 
     const putRes = await request(`/~/public/${slug}/a.md`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ content: "updated" }),
     })
     expect(putRes.status).toBe(200)
@@ -98,11 +98,11 @@ describe("file operations", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title: "Test", files: [{ path: "a.md", content: "hello world" }] }),
     })
-    const { slug } = await createRes.json() as { slug: string }
+    const { slug, token } = await createRes.json() as { slug: string; token: string }
 
     const patchRes = await request(`/~/public/${slug}/a.md`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
       body: JSON.stringify({ updates: [{ old_str: "hello", new_str: "goodbye" }] }),
     })
     expect(patchRes.status).toBe(200)
@@ -125,9 +125,12 @@ describe("file operations", () => {
         ],
       }),
     })
-    const { slug } = await createRes.json() as { slug: string }
+    const { slug, token } = await createRes.json() as { slug: string; token: string }
 
-    const deleteRes = await request(`/~/public/${slug}/remove.md`, { method: "DELETE" })
+    const deleteRes = await request(`/~/public/${slug}/remove.md`, {
+      method: "DELETE",
+      headers: { "Authorization": `Bearer ${token}` },
+    })
     expect(deleteRes.status).toBe(200)
 
     const folder = await getFolder(slug)
