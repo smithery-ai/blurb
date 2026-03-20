@@ -14,7 +14,7 @@
     "hono": "^4.7.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
-    "koen": "file:../sono"
+    "engei": "file:../engei"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250109.0",

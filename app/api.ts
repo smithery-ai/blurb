@@ -1,4 +1,4 @@
-import type { Anchor } from "koen"
+import type { Anchor } from "engei"
 
 export async function fetchFolder(slug: string) {
   // Use server-inlined data if available (eliminates JSON fetch round-trip)

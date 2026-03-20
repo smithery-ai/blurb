@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { Editor, FileTree, useFileTreeStore, getDefaultWidgets } from "koen"
-import type { Anchor, Comment, TreeFile } from "koen"
+import { Editor, FileTree, useFileTreeStore, getDefaultWidgets } from "engei"
+import type { Anchor, Comment, TreeFile } from "engei"
 
 const widgets = getDefaultWidgets()
 import { fetchFolder, postComment, deleteComment, postReply } from "./api"

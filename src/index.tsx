@@ -3,8 +3,9 @@ import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher }
+type HonoEnv = { Bindings: Bindings }
 
-const app = new Hono<{ Bindings: Bindings }>()
+const app = new Hono<HonoEnv>()
 
 // ─── Helper: serve SPA ─────────────────────────────────────
 

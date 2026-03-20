@@ -1,6 +1,6 @@
 import { createRoot } from "react-dom/client"
 import FolderView from "./FolderView"
-import "koen/styles"
+import "engei/styles"
 import "./app.css"
 
 function App() {
