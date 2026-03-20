@@ -96,9 +96,22 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
       if (!prev) return prev
       switch (event.type) {
         case "comment:created": {
-          // Skip if we already have this comment (optimistic update)
           const file = prev.files.find(f => f.id === event.fileId)
-          if (file?.comments.some(c => c.id === event.comment.id)) return prev
+          if (!file) return prev
+          // Skip if we already have this comment by real ID
+          if (file.comments.some(c => c.id === event.comment.id)) return prev
+          // Replace optimistic temp comment if one exists (same body = same comment)
+          const tempIdx = file.comments.findIndex(c => c.id.startsWith("temp-") && c.body === event.comment.body)
+          if (tempIdx !== -1) {
+            return {
+              ...prev,
+              files: prev.files.map(f =>
+                f.id === event.fileId
+                  ? { ...f, comments: f.comments.map((c, i) => i === tempIdx ? event.comment : c) }
+                  : f
+              ),
+            }
+          }
           return {
             ...prev,
             files: prev.files.map(f =>
@@ -123,8 +136,15 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               ...f,
               comments: f.comments.map(c => {
                 if (c.id !== event.commentId) return c
-                // Skip if we already have this reply
+                // Skip if we already have this reply by real ID
                 if (c.replies.some(r => r.id === event.reply.id)) return c
+                // Replace optimistic temp reply if one exists (same body = same reply)
+                const tempIdx = c.replies.findIndex(r => r.id.startsWith("temp-") && r.body === event.reply.body)
+                if (tempIdx !== -1) {
+                  const updated = [...c.replies]
+                  updated[tempIdx] = event.reply
+                  return { ...c, replies: updated }
+                }
                 return { ...c, replies: [...c.replies, event.reply] }
               }),
             })),
