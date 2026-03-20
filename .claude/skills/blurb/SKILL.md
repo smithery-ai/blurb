@@ -267,6 +267,86 @@ Vector search is standard[^1]. Hybrid methods outperform[^2].
 [^2]: Ma et al., 2023. "Hybrid Search Revisited." SIGIR.
 ```
 
+## Comment Notifications (real-time)
+
+Every folder automatically gets a [hook.new](https://hook.new) webhook. When a user comments or replies, blurb fires an event to hook.new, and you can listen for it via SSE — no public URL needed.
+
+### Listening for comments
+
+After creating a folder, use the returned `hook` to listen for comments. The script at [scripts/hook-listen.ts](scripts/hook-listen.ts) blocks until one SSE event arrives, prints it, and exits.
+
+Workflow:
+
+```bash
+# 1. Create folder — save the hook details
+RESULT=$(curl -s -X POST https://blurb.md/~/public \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Report","files":[{"path":"report.md","content":"# Report\n\nContent..."}]}')
+HOOK_ID=$(echo "$RESULT" | jq -r '.hook.hook_id')
+MANAGE_TOKEN=$(echo "$RESULT" | jq -r '.hook.manage_token')
+SLUG=$(echo "$RESULT" | jq -r '.slug')
+
+# 2. Create a watch sink (SSE) on hook.new
+WATCH=$(curl -s -X POST "https://hook.new/h/$HOOK_ID/sinks" \
+  -H "Authorization: Bearer $MANAGE_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"kind":"watch","mode":"observe","timeoutMs":120000}')
+STREAM_URL=$(echo "$WATCH" | jq -r '.stream_url')
+WATCH_TOKEN=$(echo "$WATCH" | jq -r '.watch_token')
+
+# 3. Listen — run in background, resolves when a comment arrives
+bun run scripts/hook-listen.ts "$STREAM_URL" "$WATCH_TOKEN"
+```
+
+The listener blocks until a comment/reply arrives, prints the JSON event, and exits. Run it as a background process to get notified asynchronously.
+
+### Event payloads
+
+**comment.created:**
+```json
+{
+  "event": "comment.created",
+  "slug": "adj-animal-1234",
+  "file": "report.md",
+  "comment": {
+    "id": "uuid",
+    "anchor": {"exact": "highlighted text"},
+    "body": "This needs more detail",
+    "author": "Sharp Swan"
+  }
+}
+```
+
+**reply.created:**
+```json
+{
+  "event": "reply.created",
+  "slug": "adj-animal-1234",
+  "file": "report.md",
+  "comment_id": "uuid",
+  "reply": {"id": "uuid", "body": "Thanks!", "author": "Sharp Swan"}
+}
+```
+
+### Replying to a comment
+
+```bash
+curl -X POST "https://blurb.md/~/public/$SLUG/$FILE/@comments/$COMMENT_ID/replies" \
+  -H "Content-Type: application/json" \
+  -d '{"body": "Thanks for the feedback!", "author": "Agent"}'
+```
+
+After replying, create a new watch sink and re-listen for the next event.
+
+### Alternative: direct webhook
+
+If you have a public URL, skip hook.new:
+```bash
+curl -X POST https://blurb.md/~/public \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Report","webhook_url":"https://my-agent.com/webhook","files":[...]}'
+```
+
 ## Tips
 
 - **Inter-file links**: `[Results](results.md)` navigates between files

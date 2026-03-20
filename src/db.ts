@@ -136,13 +136,13 @@ export async function createFolder(
   slug: string,
   title: string,
   files: { path: string; content: string }[],
-  opts?: { description?: string; command?: string; tokenHash?: string },
+  opts?: { description?: string; command?: string; tokenHash?: string; webhookUrl?: string },
 ) {
   const folderId = id()
 
   const stmts = [
-    db.prepare("INSERT INTO folders (id, slug, title, description, command, token_hash) VALUES (?, ?, ?, ?, ?, ?)")
-      .bind(folderId, slug, title, opts?.description || null, opts?.command || null, opts?.tokenHash || null),
+    db.prepare("INSERT INTO folders (id, slug, title, description, command, token_hash, webhook_url) VALUES (?, ?, ?, ?, ?, ?, ?)")
+      .bind(folderId, slug, title, opts?.description || null, opts?.command || null, opts?.tokenHash || null, opts?.webhookUrl || null),
     ...files.map((f, i) =>
       db.prepare(
         "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
@@ -232,6 +232,13 @@ export async function patchFile(
   }
 
   return { id: file.id, path, applied: applied.length, failed: failed.length, failedMatches: failed }
+}
+
+// ─── Webhooks ────────────────────────────────────────────
+
+export async function getWebhookUrl(db: DB, slug: string): Promise<string | null> {
+  const row = await db.prepare("SELECT webhook_url FROM folders WHERE slug = ?").bind(slug).first() as any
+  return row?.webhook_url || null
 }
 
 // ─── Comments ───────────────────────────────────────────────

@@ -8,6 +8,65 @@ import YAML from "yaml"
 type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string }
 type HonoEnv = { Bindings: Bindings }
 
+/** Validate webhook URL — must be HTTPS (or HTTP localhost in dev). Blocks SSRF. */
+function isValidWebhookUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    if (parsed.protocol === "https:") return true
+    // Allow HTTP only for localhost/127.0.0.1 (dev/testing)
+    if (parsed.protocol === "http:" && (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")) return true
+    return false
+  } catch {
+    return false
+  }
+}
+
+/** Fire-and-forget webhook POST. 10s timeout, swallows errors. */
+function fireWebhook(url: string, payload: object) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 10_000)
+  return fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+    signal: controller.signal,
+  }).catch(() => {}).finally(() => clearTimeout(timeout))
+}
+
+/** Safe waitUntil — falls back to fire-and-forget if no ExecutionContext */
+function safeWaitUntil(c: any, promise: Promise<any>) {
+  try {
+    c.executionCtx.waitUntil(promise)
+  } catch {
+    // No ExecutionContext (e.g., in tests) — just let it run
+  }
+}
+
+/** Create a hook on hook.new — returns ingest_url + manage details, or null on failure. */
+async function createHook(): Promise<{
+  hook_id: string
+  ingest_url: string
+  manage_url: string
+  manage_token: string
+} | null> {
+  try {
+    const res = await fetch("https://hook.new/hooks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) return null
+    const data = await res.json() as any
+    // Validate required fields
+    if (!data?.hook_id || !data?.ingest_url || !data?.manage_url || !data?.manage_token) return null
+    if (!data.ingest_url.startsWith("https://")) return null
+    return data
+  } catch {
+    return null
+  }
+}
+
+
 const app = new Hono<HonoEnv>()
 
 // ─── Helper: serve SPA ─────────────────────────────────────
@@ -153,6 +212,286 @@ app.get("/.well-known/skills/:skill/:path{.+}", async (c) => {
   return c.redirect(`/~/public/blurb/.well-known/skills/${c.req.param("skill")}/${c.req.param("path")}`, 302)
 })
 
+// ─── OpenAPI spec ────────────────────────────────────────────
+
+app.get("/openapi.json", (c) => {
+  return c.json({
+    openapi: "3.1.0",
+    info: {
+      title: "Blurb",
+      description: "Beautiful collaborative gists for humans and agents. Create shareable folders of markdown files with rich embedded widgets.",
+      version: "1.0.0",
+    },
+    servers: [{ url: "https://blurb.md" }],
+    paths: {
+      "/~/public": {
+        post: {
+          operationId: "createFolder",
+          summary: "Create a folder with files",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["files"],
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    command: { type: "string", description: "Install command shown on the landing page" },
+                    token: { type: "string", minLength: 32, description: "Auth token for future edits. Auto-generated if omitted." },
+                    webhook_url: { type: "string", format: "uri", description: "URL to receive comment/reply webhooks" },
+                    files: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        type: "object",
+                        required: ["path", "content"],
+                        properties: {
+                          path: { type: "string", description: "File path (e.g. 'report.md' or 'data/results.md')" },
+                          content: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Folder created", content: { "application/json": { schema: { type: "object", properties: { id: { type: "string" }, slug: { type: "string" }, token: { type: "string" } } } } } },
+            "400": { description: "Validation error" },
+          },
+        },
+      },
+      "/~/public/{slug}": {
+        get: {
+          operationId: "getFolder",
+          summary: "Get folder with all files and comments",
+          parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }],
+          responses: {
+            "200": { description: "Folder data" },
+            "404": { description: "Not found" },
+          },
+        },
+        put: {
+          operationId: "replaceFolder",
+          summary: "Create or replace a folder at a specific slug",
+          security: [{ bearerAuth: [] }],
+          parameters: [{ name: "slug", in: "path", required: true, schema: { type: "string" } }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["files"],
+                  properties: {
+                    title: { type: "string" },
+                    description: { type: "string" },
+                    command: { type: "string" },
+                    token: { type: "string", minLength: 32 },
+                    webhook_url: { type: "string", format: "uri" },
+                    files: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        type: "object",
+                        required: ["path", "content"],
+                        properties: {
+                          path: { type: "string" },
+                          content: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "Folder replaced" },
+            "201": { description: "Folder created" },
+            "400": { description: "Validation error" },
+            "403": { description: "Forbidden — invalid token" },
+          },
+        },
+      },
+      "/~/public/{slug}/{path}": {
+        get: {
+          operationId: "getFile",
+          summary: "Read a single file",
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: {
+            "200": { description: "File content" },
+            "404": { description: "Not found" },
+          },
+        },
+        put: {
+          operationId: "replaceFile",
+          summary: "Create or replace a file (upsert)",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+          ],
+          requestBody: {
+            required: true,
+            content: { "application/json": { schema: { type: "object", required: ["content"], properties: { content: { type: "string" } } } } },
+          },
+          responses: {
+            "200": { description: "File replaced" },
+            "201": { description: "File created" },
+            "403": { description: "Forbidden" },
+            "404": { description: "Folder not found" },
+          },
+        },
+        patch: {
+          operationId: "editFile",
+          summary: "Edit file with old_str/new_str diffs",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["updates"],
+                  properties: {
+                    updates: {
+                      type: "array",
+                      minItems: 1,
+                      items: {
+                        type: "object",
+                        required: ["old_str", "new_str"],
+                        properties: {
+                          old_str: { type: "string" },
+                          new_str: { type: "string" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": { description: "All edits applied" },
+            "207": { description: "Some edits failed (partial success)" },
+            "403": { description: "Forbidden" },
+            "404": { description: "Not found" },
+          },
+        },
+        delete: {
+          operationId: "deleteFile",
+          summary: "Delete a file and its comments",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: {
+            "200": { description: "Deleted" },
+            "403": { description: "Forbidden" },
+            "404": { description: "Not found" },
+          },
+        },
+      },
+      "/~/public/{slug}/{path}/@comments": {
+        post: {
+          operationId: "addComment",
+          summary: "Add an inline comment to a file",
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["anchor", "body"],
+                  properties: {
+                    anchor: { type: "object", description: "Text selection anchor" },
+                    body: { type: "string" },
+                    author: { type: "string", description: "Defaults to anonymous name" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Comment created" },
+            "404": { description: "File not found" },
+          },
+        },
+      },
+      "/~/public/{slug}/{path}/@comments/{commentId}": {
+        delete: {
+          operationId: "deleteComment",
+          summary: "Delete a comment",
+          security: [{ bearerAuth: [] }],
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+            { name: "commentId", in: "path", required: true, schema: { type: "string" } },
+          ],
+          responses: {
+            "200": { description: "Deleted" },
+            "403": { description: "Forbidden" },
+          },
+        },
+      },
+      "/~/public/{slug}/{path}/@comments/{commentId}/replies": {
+        post: {
+          operationId: "addReply",
+          summary: "Add a reply to a comment",
+          parameters: [
+            { name: "slug", in: "path", required: true, schema: { type: "string" } },
+            { name: "path", in: "path", required: true, schema: { type: "string" } },
+            { name: "commentId", in: "path", required: true, schema: { type: "string" } },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["body"],
+                  properties: {
+                    body: { type: "string" },
+                    author: { type: "string", description: "Defaults to anonymous name" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Reply created" },
+          },
+        },
+      },
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          description: "Token returned when creating a folder",
+        },
+      },
+    },
+  }, 200, { "Cache-Control": "public, s-maxage=86400, stale-while-revalidate=604800" })
+})
+
 // ─── Auth helpers ────────────────────────────────────────────
 
 async function hashToken(token: string): Promise<string> {
@@ -191,7 +530,13 @@ async function requireFolderAuth(c: any, slug: string): Promise<Response | null>
 
 // ─── Home redirect ───────────────────────────────────────────
 
-app.get("/", (c) => c.redirect("/~/public/blurb"))
+app.get("/", async (c) => {
+  const accept = c.req.header("Accept") || ""
+  if (accept.includes("text/html")) return c.redirect("/~/public/blurb")
+  const file = await db.getFileBySlugAndPath(c.env.DB, "blurb", ".claude/skills/blurb/SKILL.md")
+  if (!file) return c.text("SKILL.md not found", 404)
+  return c.text(file.content as string)
+})
 
 // ─── Folder routes ──────────────────────────────────────────
 
@@ -201,6 +546,7 @@ app.post("/~/public", async (c) => {
     description?: string
     command?: string
     token?: string
+    webhook_url?: string
     files: { path: string; content: string }[]
   }>()
 
@@ -214,16 +560,32 @@ app.post("/~/public", async (c) => {
     if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
   }
 
+  if (body.webhook_url && !isValidWebhookUrl(body.webhook_url)) return c.json({ error: "webhook_url must be a valid HTTPS URL" }, 400)
+
   if (body.token && body.token.length < 32) return c.json({ error: "token must be at least 32 characters" }, 400)
   const token = body.token || generateToken()
   const tokenHash = await hashToken(token)
   const slug = await uniqueSlug(c.env.DB)
+
+  // Auto-create a hook on hook.new unless caller provided their own webhook_url
+  let webhookUrl = body.webhook_url
+  let hook: Awaited<ReturnType<typeof createHook>> = null
+  if (!webhookUrl) {
+    hook = await createHook()
+    if (hook) webhookUrl = hook.ingest_url
+  }
+
   const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
     description: body.description,
     command: body.command,
     tokenHash,
+    webhookUrl,
   })
-  return c.json({ ...folder, token }, 201)
+  return c.json({
+    ...folder,
+    token,
+    ...(hook ? { hook: { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token } } : {}),
+  }, 201)
 })
 
 // Create/replace folder with a specific slug
@@ -234,6 +596,7 @@ app.put("/~/public/:slug", async (c) => {
     description?: string
     command?: string
     token?: string
+    webhook_url?: string
     files: { path: string; content: string }[]
   }>()
 
@@ -246,6 +609,8 @@ app.put("/~/public/:slug", async (c) => {
     const err = db.validatePath(f.path)
     if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
   }
+
+  if (body.webhook_url && !isValidWebhookUrl(body.webhook_url)) return c.json({ error: "webhook_url must be a valid HTTPS URL" }, 400)
 
   // Check if folder exists — if so, require auth to replace
   const existingMeta = await db.getFolderTokenHash(c.env.DB, slug)
@@ -278,12 +643,22 @@ app.put("/~/public/:slug", async (c) => {
     returnToken = token
   }
 
+  // Auto-create a hook on hook.new for new folders unless caller provided their own webhook_url
+  let webhookUrl = body.webhook_url
+  let hook: Awaited<ReturnType<typeof createHook>> = null
+  if (!webhookUrl && !existingMeta) {
+    hook = await createHook()
+    if (hook) webhookUrl = hook.ingest_url
+  }
+
   const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
     description: body.description,
     command: body.command,
     tokenHash,
+    webhookUrl,
   })
-  const result = returnToken ? { ...folder, token: returnToken } : folder
+  const result: any = returnToken ? { ...folder, token: returnToken } : folder
+  if (hook) result.hook = { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token }
   return c.json(result, existingMeta ? 200 : 201)
 })
 
@@ -430,6 +805,19 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
     if (!body.body) return c.json({ error: "body is required" }, 400)
     const author = body.author || await anonName(ip)
     const reply = await db.addReply(c.env.DB, comment.commentId, body.body, author)
+
+    // Fire webhook
+    const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
+    if (webhookUrl) {
+      safeWaitUntil(c, fireWebhook(webhookUrl, {
+        event: "reply.created",
+        slug,
+        file: comment.filePath,
+        comment_id: comment.commentId,
+        reply: { id: reply.id, body: body.body, author },
+      }))
+    }
+
     return c.json(reply, 201)
   }
 
@@ -441,6 +829,18 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
     if (!file) return c.json({ error: "File not found" }, 404)
     const author = body.author || await anonName(ip)
     const result = await db.addComment(c.env.DB, file.id as string, body.anchor, body.body, author)
+
+    // Fire webhook
+    const webhookUrl = await db.getWebhookUrl(c.env.DB, slug)
+    if (webhookUrl) {
+      safeWaitUntil(c, fireWebhook(webhookUrl, {
+        event: "comment.created",
+        slug,
+        file: comment.filePath,
+        comment: { id: result.id, anchor: body.anchor, body: body.body, author },
+      }))
+    }
+
     return c.json(result, 201)
   }
 
