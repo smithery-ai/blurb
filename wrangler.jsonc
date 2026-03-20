@@ -2,6 +2,10 @@
   "name": "sono-worker",
   "main": "src/index.tsx",
   "compatibility_date": "2025-03-18",
+  "routes": [
+    { "pattern": "blurb.md", "custom_domain": true },
+    { "pattern": "www.blurb.md", "custom_domain": true }
+  ],
   "assets": {
     "directory": "dist",
     "binding": "ASSETS",

@@ -14,7 +14,7 @@ Create rich markdown artifacts with inline widgets — charts, diagrams, maps, t
 
 ## API
 
-**Base URL:** `https://sono-worker.smithery.workers.dev`
+**Base URL:** `https://blurb.md`
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
@@ -31,12 +31,12 @@ Create rich markdown artifacts with inline widgets — charts, diagrams, maps, t
 ### Create a folder
 
 ```bash
-curl -X POST https://sono-worker.smithery.workers.dev/~/public \
+curl -X POST https://blurb.md/~/public \
   -H "Content-Type: application/json" \
   -d '{"title":"Report Title","files":[{"path":"report.md","content":"...markdown..."}]}'
 ```
 
-Returns `{"id":"...","slug":"adj-animal-NNNN"}`. The report is viewable at `https://sono-worker.smithery.workers.dev/~/public/{slug}`.
+Returns `{"id":"...","slug":"adj-animal-NNNN"}`. The report is viewable at `https://blurb.md/~/public/{slug}`.
 
 **Files use paths** — organize with folders:
 ```json
@@ -55,7 +55,7 @@ Allowed file extensions: `.md`, `.mdx`, `.json`, `.ts`, `.tsx`, `.js`, `.jsx`, `
 ### Read a file
 
 ```bash
-curl https://sono-worker.smithery.workers.dev/~/public/:slug/:path \
+curl https://blurb.md/~/public/:slug/:path \
   -H "Accept: application/json"
 ```
 
@@ -64,7 +64,7 @@ Always read before editing — you need the current content to produce correct d
 ### Create or replace a file (idempotent PUT)
 
 ```bash
-curl -X PUT https://sono-worker.smithery.workers.dev/~/public/:slug/:path \
+curl -X PUT https://blurb.md/~/public/:slug/:path \
   -H "Content-Type: application/json" \
   -d '{"content":"# New Page\n..."}'
 ```
@@ -72,7 +72,7 @@ curl -X PUT https://sono-worker.smithery.workers.dev/~/public/:slug/:path \
 ### Edit a file (diff-based)
 
 ```bash
-curl -X PATCH https://sono-worker.smithery.workers.dev/~/public/:slug/:path \
+curl -X PATCH https://blurb.md/~/public/:slug/:path \
   -H "Content-Type: application/json" \
   -d '{"updates":[{"old_str":"exact text to find","new_str":"replacement text"}]}'
 ```
@@ -80,7 +80,7 @@ curl -X PATCH https://sono-worker.smithery.workers.dev/~/public/:slug/:path \
 ### Delete a file
 
 ```bash
-curl -X DELETE https://sono-worker.smithery.workers.dev/~/public/:slug/:path
+curl -X DELETE https://blurb.md/~/public/:slug/:path
 ```
 
 ## Workflow
@@ -92,7 +92,7 @@ Write a markdown document with embedded widgets. See [references/widget-spec.md]
 ### 2. Publish via API
 
 ```bash
-curl -s -X POST https://sono-worker.smithery.workers.dev/~/public \
+curl -s -X POST https://blurb.md/~/public \
   -H "Content-Type: application/json" \
   -d "$(cat <<'ENDJSON'
 {"title":"My Report","files":[{"path":"report.md","content":"# Title\n\nContent here..."}]}
@@ -104,7 +104,7 @@ ENDJSON
 
 The response contains a `slug`. The report is live at:
 ```
-https://sono-worker.smithery.workers.dev/~/public/{slug}
+https://blurb.md/~/public/{slug}
 ```
 
 ## Available Widgets
@@ -246,5 +246,16 @@ Vector search is standard[^1]. Hybrid methods outperform[^2].
 - **Chart widget uses `widget` code blocks** — NOT `json:widget` or `chart`. Other widgets use their own lang: `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`, `globe`, `diff`
 - **Pie/doughnut charts need explicit `backgroundColor`** on datasets or all slices render the same color
 - **Map `center` is respected** — if you set `center` and `zoom`, the map won't auto-fit to markers. Omit `center` to auto-fit
-- **Mermaid gotchas**: No backticks in labels, no special chars (`→`) in messages, use `#quot;` for quotes
+- **Mermaid gotchas**: No backticks in labels, no special chars (`→`) in messages, no curly braces `{}` in message labels (breaks v11 parser), use `#quot;` for quotes
 - **Sketch elements need absolute coordinates** — plan your layout on a grid (e.g., 700x200) before writing the spec
+
+## Validating mermaid (optional)
+
+Mermaid renders client-side — `curl` can't tell you if syntax is broken. Validate locally before publishing:
+
+```bash
+echo 'sequenceDiagram
+    A->>B: hello' | npx -y @mermaid-js/mermaid-cli -i - -o /tmp/test.svg 2>&1
+```
+
+Non-zero exit = broken syntax. Fix before curling.
