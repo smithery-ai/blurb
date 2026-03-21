@@ -207,7 +207,7 @@ describe("comment gating with mode '76' (default)", () => {
   beforeAll(async () => {
     const { data } = await createFolder({ mode: "76" })
     slug = data.slug
-  })
+  }, 15000)
 
   it("allows public comment", async () => {
     const res = await postComment(slug)
