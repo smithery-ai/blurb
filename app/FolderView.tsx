@@ -404,19 +404,10 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
                 </span>
               ))}
               {folder?.mode && folder.mode !== "76" && (
-                <span className="breadcrumb-mode" title={folder.mode === "70" ? "Private" : "Read-only"}>
+                <span className="breadcrumb-mode" title="Read-only">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    {folder.mode[1] === "0" ? (
-                      <>
-                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-                      </>
-                    ) : (
-                      <>
-                        <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
-                        <path d="M7 11V7a5 5 0 0 1 9.9-1" />
-                      </>
-                    )}
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
                   </svg>
                 </span>
               )}
