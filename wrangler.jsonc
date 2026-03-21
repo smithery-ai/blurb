@@ -20,6 +20,12 @@
       "migrations_dir": "migrations"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "FILES",
+      "bucket_name": "blurb-files"
+    }
+  ],
   "durable_objects": {
     "bindings": [
       {

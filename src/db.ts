@@ -45,6 +45,7 @@ export function validatePath(path: string): string | null {
     "sh", "bash", "zsh",
     "sql", "graphql",
     "dockerfile",
+    "pdf",
   ]
   if (!ext || !allowed.includes(ext)) return `path must end in .${allowed.join(", .")}`
   if (path.startsWith("/")) return "path must not start with /"

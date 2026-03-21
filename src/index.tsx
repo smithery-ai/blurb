@@ -3,7 +3,7 @@ import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
 
 
-type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string; ROOMS: DurableObjectNamespace }
+type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string; ROOMS: DurableObjectNamespace; FILES: R2Bucket }
 type HonoEnv = { Bindings: Bindings }
 
 /** Validate webhook URL — must be HTTPS (or HTTP localhost in dev). Blocks SSRF. */
@@ -876,6 +876,15 @@ app.get("/~/public/:slug/og.png", async (c) => {
 
 // ─── File + comment routes ──────────────────────────────────
 
+// Binary file extensions served from R2
+const BINARY_EXTS = new Set(["pdf"])
+function isBinaryPath(path: string): boolean {
+  const ext = path.split(".").pop()?.toLowerCase()
+  return ext ? BINARY_EXTS.has(ext) : false
+}
+
+const BINARY_CONTENT_TYPES: Record<string, string> = { pdf: "application/pdf" }
+
 app.get("/~/public/:slug/:path{.+}", async (c) => {
   const slug = c.req.param("slug")
   const path = c.req.param("path")
@@ -891,6 +900,20 @@ app.get("/~/public/:slug/:path{.+}", async (c) => {
     if (!file) return c.json({ error: "File not found" }, 404)
     const comments = await db.listComments(c.env.DB, file.id as string)
     return c.json(comments)
+  }
+
+  // Serve binary files from R2
+  if (isBinaryPath(path)) {
+    const r2Key = `${slug}/${path}`
+    const obj = await c.env.FILES.get(r2Key)
+    if (!obj) return c.json({ error: "Not found" }, 404)
+    const ext = path.split(".").pop()?.toLowerCase() || ""
+    return new Response(obj.body, {
+      headers: {
+        "Content-Type": BINARY_CONTENT_TYPES[ext] || "application/octet-stream",
+        "Cache-Control": "public, s-maxage=3600, stale-while-revalidate=86400",
+      },
+    })
   }
 
   const accept = c.req.header("accept") || ""
@@ -924,14 +947,33 @@ app.put("/~/public/:slug/:path{.+}", async (c) => {
   const authErr = await requireFolderAuth(c, c.req.param("slug"))
   if (authErr) return authErr
 
-  const body = await c.req.json<{ content: string }>()
-  if (!body.content && body.content !== "") return c.json({ error: "content is required" }, 400)
-
   const path = c.req.param("path")
   const pathErr = db.validatePath(path)
   if (pathErr) return c.json({ error: `Invalid path: ${pathErr}` }, 400)
 
   const slug = c.req.param("slug")
+  const contentType = c.req.header("content-type") || ""
+
+  // Binary upload — store in R2
+  if (isBinaryPath(path) && !contentType.includes("application/json")) {
+    const folder = await db.getFolderTokenHash(c.env.DB, slug)
+    if (!folder) return c.json({ error: "Folder not found" }, 404)
+
+    const body = await c.req.arrayBuffer()
+    if (!body || body.byteLength === 0) return c.json({ error: "Empty body" }, 400)
+
+    const r2Key = `${slug}/${path}`
+    const ext = path.split(".").pop()?.toLowerCase() || ""
+    await c.env.FILES.put(r2Key, body, {
+      httpMetadata: { contentType: BINARY_CONTENT_TYPES[ext] || "application/octet-stream" },
+    })
+
+    return c.json({ path, size: body.byteLength, stored: "r2", url: `/~/public/${slug}/${path}` }, 201)
+  }
+
+  const body = await c.req.json<{ content: string }>()
+  if (!body.content && body.content !== "") return c.json({ error: "content is required" }, 400)
+
   const result = await db.replaceFile(c.env.DB, slug, path, body.content)
   if (!result) return c.json({ error: "Folder not found" }, 404)
   broadcastToRoom(c, slug, {

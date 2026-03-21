@@ -195,7 +195,7 @@ MapLibre GL vector maps with markers. Dark Matter (dark) / Voyager (light) tiles
 ```
 ````
 
-Spec: `center` is `[lat, lng]`, `markers[].location` is `[lat, lng]`. `paths[].coordinates` is an array of `[lat, lng]` points. Path options: `color`, `width`, `dashed`. Set `controls: true` to show zoom buttons. Omit `center` to auto-fit.
+Spec: `center` is `[lat, lng]`, `markers[].location` is `[lat, lng]`. Set `pin: true` on a marker for a Google Maps-style teardrop pin. `paths[].coordinates` is an array of `[lat, lng]` points. Path options: `color`, `width`, `dashed`. Set `controls: true` to show zoom buttons. Omit `center` to auto-fit.
 
 ### Timeline (`timeline` code block)
 
@@ -209,15 +209,23 @@ Vertical chronological timeline with colored dots.
 
 ### Calendar (`calendar` code block)
 
-Month grid with colored event ranges.
+Month grid or week view with event ranges. Two views:
 
+**Month view** (default):
 ````markdown
 ```calendar
 {"month":"2025-03","events":[{"start":"2025-03-01","end":"2025-03-03","title":"Sprint 1","color":"#6a8ac0"},{"start":"2025-03-08","end":"2025-03-10","title":"Sprint 2","color":"#7aa874"}]}
 ```
 ````
 
-If `month` is omitted, it's inferred from the earliest event.
+**Week view** with timed events:
+````markdown
+```calendar
+{"view":"week","week":"2025-03-15","events":[{"start":"2025-03-17","startTime":"09:00","end":"2025-03-17","endTime":"10:30","title":"Standup","color":"#6a8ac0"},{"start":"2025-03-18","title":"Holiday","end":"2025-03-18","color":"#7aa874"}]}
+```
+````
+
+Week view: events with `startTime`/`endTime` (HH:MM) show as timed blocks. Events without times show as all-day banners. Scrollable grid, auto-scrolls to first event. `month` is inferred if omitted. `week` accepts any date (snaps to Sunday).
 
 ### Embeds (`embed` code block)
 
@@ -228,6 +236,27 @@ Sanitized iframes for YouTube, Vimeo, Loom, Figma, CodeSandbox, StackBlitz, etc.
 https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ```
 ````
+
+### Attachments (`attachment` code block)
+
+Inline file cards for binary attachments (PDFs, docs, etc.). Upload the file to R2, then reference it.
+
+**Step 1: Upload binary file**
+```bash
+curl -X PUT https://blurb.md/~/public/:slug/report.pdf \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/pdf" \
+  --data-binary @report.pdf
+```
+
+**Step 2: Embed in markdown**
+````markdown
+```attachment
+{"url": "/~/public/:slug/report.pdf", "title": "Q1 Report", "size": "2.4 MB"}
+```
+````
+
+Renders as a Notion-style inline file link with icon, filename, and size. Clicking opens the file in a new tab. Supported binary extensions: `.pdf`.
 
 ### Sketches (`sketch` code block)
 
@@ -337,7 +366,7 @@ curl -X POST https://blurb.md/~/public \
 - Multi-file artifacts show a collapsible tree sidebar
 - Keep `widgetId` unique within a document (for chart widgets)
 - Colors auto-assign from the engei palette — only specify when needed
-- **All widgets have their own code block lang**: `chart`, `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`. Prefer the named lang — it auto-injects `widgetId` and `type`. The generic `` ```widget `` block also works for any widget but requires explicit `"widgetId"` and `"type"` in the JSON
+- **All widgets have their own code block lang**: `chart`, `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`, `attachment`. Prefer the named lang — it auto-injects `widgetId` and `type`. The generic `` ```widget `` block also works for any widget but requires explicit `"widgetId"` and `"type"` in the JSON
 - **Pie/doughnut charts need explicit `backgroundColor`** on datasets or all slices render the same color
 - **Map `center` is respected** — if you set `center` and `zoom`, the map won't auto-fit to markers. Omit `center` to auto-fit
 - **Mermaid gotchas**: No backticks in labels, no special chars (`→`) in messages, no curly braces `{}` in message labels (breaks v11 parser), use `#quot;` for quotes
