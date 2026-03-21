@@ -181,6 +181,46 @@ export async function createFolder(
   return { id: folderId, slug }
 }
 
+/** Update folder metadata and upsert files (non-destructive — unmentioned files are preserved) */
+export async function updateFolder(
+  db: DB,
+  folderId: string,
+  opts: { title?: string; description?: string; command?: string; mode?: string },
+  files: { path: string; content: string }[],
+) {
+  const sets: string[] = []
+  const vals: any[] = []
+  if (opts.title !== undefined) { sets.push("title = ?"); vals.push(opts.title) }
+  if (opts.description !== undefined) { sets.push("description = ?"); vals.push(opts.description) }
+  if (opts.command !== undefined) { sets.push("command = ?"); vals.push(opts.command) }
+  if (opts.mode !== undefined) { sets.push("mode = ?"); vals.push(opts.mode) }
+
+  const stmts: D1PreparedStatement[] = []
+  if (sets.length > 0) {
+    stmts.push(db.prepare(`UPDATE folders SET ${sets.join(", ")} WHERE id = ?`).bind(...vals, folderId))
+  }
+
+  // Upsert each file
+  for (const f of files) {
+    const existing = await db.prepare(
+      "SELECT id FROM files WHERE folder_id = ? AND path = ?"
+    ).bind(folderId, f.path).first() as any
+    if (existing) {
+      stmts.push(db.prepare("UPDATE files SET content = ? WHERE id = ?").bind(f.content, existing.id))
+    } else {
+      const last = await db.prepare(
+        "SELECT MAX(sort_order) as max_sort FROM files WHERE folder_id = ?"
+      ).bind(folderId).first() as any
+      const sortOrder = (last?.max_sort ?? -1) + 1
+      stmts.push(db.prepare(
+        "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
+      ).bind(id(), folderId, f.path, f.content, sortOrder))
+    }
+  }
+
+  if (stmts.length > 0) await db.batch(stmts)
+}
+
 // ─── File operations ────────────────────────────────────────
 
 export async function getFileBySlugAndPath(db: DB, slug: string, path: string) {
