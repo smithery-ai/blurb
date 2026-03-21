@@ -437,7 +437,7 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
               content={file.content}
               filename={file.path}
               comments={file.comments}
-              commentsVisible={!folder?.mode || (parseInt(folder.mode[1], 8) & 2) !== 0}
+              commentsLocked={folder?.mode ? (parseInt(folder.mode[1], 8) & 2) === 0 : false}
               readOnly={true}
               mode={/\.(md|mdx)$/i.test(file.path) ? "preview" : "source"}
               theme={theme}
