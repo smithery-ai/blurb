@@ -517,6 +517,18 @@ function generateToken(): string {
   return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("")
 }
 
+/** Check if caller is a token holder (owner or admin). Returns true if authorized. */
+async function isTokenHolder(c: any, slug: string): Promise<boolean> {
+  const auth = c.req.header("authorization") || ""
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : ""
+  if (!bearer) return false
+  if (c.env.ADMIN_TOKEN && bearer === c.env.ADMIN_TOKEN) return true
+  const folder = await db.getFolderTokenHash(c.env.DB, slug)
+  if (!folder?.tokenHash) return false
+  const hash = await hashToken(bearer)
+  return hash === folder.tokenHash
+}
+
 /** Check Authorization header against folder's token_hash or ADMIN_TOKEN. Returns error response or null if authorized. */
 async function requireFolderAuth(c: any, slug: string): Promise<Response | null> {
   const auth = c.req.header("authorization") || ""
@@ -570,10 +582,16 @@ app.post("/~/public", async (c) => {
     command?: string
     token?: string
     webhook_url?: string
+    mode?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  if (body.mode) {
+    const modeErr = db.validateMode(body.mode)
+    if (modeErr) return c.json({ error: modeErr }, 400)
+  }
 
   const landingErr = db.validateLanding(body.description, body.command)
   if (landingErr) return c.json({ error: landingErr }, 400)
@@ -603,6 +621,7 @@ app.post("/~/public", async (c) => {
     command: body.command,
     tokenHash,
     webhookUrl,
+    mode: body.mode,
   })
   const url = new URL(c.req.url)
   const base = url.origin
@@ -639,10 +658,16 @@ app.put("/~/public/:slug", async (c) => {
     command?: string
     token?: string
     webhook_url?: string
+    mode?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  if (body.mode) {
+    const modeErr = db.validateMode(body.mode)
+    if (modeErr) return c.json({ error: modeErr }, 400)
+  }
 
   const landingErr = db.validateLanding(body.description, body.command)
   if (landingErr) return c.json({ error: landingErr }, 400)
@@ -654,41 +679,33 @@ app.put("/~/public/:slug", async (c) => {
 
   if (body.webhook_url && !isValidWebhookUrl(body.webhook_url)) return c.json({ error: "webhook_url must be a valid HTTPS URL" }, 400)
 
-  // Check if folder exists — if so, require auth to replace
+  // Check if folder exists — if so, upsert files + update metadata
   const existingMeta = await db.getFolderTokenHash(c.env.DB, slug)
   if (existingMeta) {
     const authErr = await requireFolderAuth(c, slug)
     if (authErr) return authErr
 
-    // Must delete in order: replies → comments → files → folder (no CASCADE)
-    await c.env.DB.prepare(`
-      DELETE FROM replies WHERE comment_id IN (
-        SELECT c.id FROM comments c JOIN files f ON c.file_id = f.id WHERE f.folder_id = ?
-      )`).bind(existingMeta.id).run()
-    await c.env.DB.prepare(`
-      DELETE FROM comments WHERE file_id IN (
-        SELECT id FROM files WHERE folder_id = ?
-      )`).bind(existingMeta.id).run()
-    await c.env.DB.prepare("DELETE FROM files WHERE folder_id = ?").bind(existingMeta.id).run()
-    await c.env.DB.prepare("DELETE FROM folders WHERE id = ?").bind(existingMeta.id).run()
+    // Upsert: update metadata + add/update files (unmentioned files are preserved)
+    await db.updateFolder(c.env.DB, existingMeta.id, {
+      title: body.title,
+      description: body.description,
+      command: body.command,
+      mode: body.mode,
+    }, body.files)
+
+    broadcastToRoom(c, slug, { type: "folder:replaced", slug })
+    return c.json({ id: existingMeta.id, slug }, 200)
   }
 
-  // For new folders: generate token. For replacements: preserve existing token_hash.
-  let tokenHash: string | undefined
-  let returnToken: string | undefined
-  if (existingMeta) {
-    tokenHash = existingMeta.tokenHash || undefined
-  } else {
-    if (body.token && body.token.length < 32) return c.json({ error: "token must be at least 32 characters" }, 400)
-    const token = body.token || generateToken()
-    tokenHash = await hashToken(token)
-    returnToken = token
-  }
+  // New folder: generate token, create
+  if (body.token && body.token.length < 32) return c.json({ error: "token must be at least 32 characters" }, 400)
+  const token = body.token || generateToken()
+  const tokenHash = await hashToken(token)
 
-  // Auto-create a hook on hook.new for new folders unless caller provided their own webhook_url
+  // Auto-create a hook on hook.new unless caller provided their own webhook_url
   let webhookUrl = body.webhook_url
   let hook: Awaited<ReturnType<typeof createHook>> = null
-  if (!webhookUrl && !existingMeta) {
+  if (!webhookUrl) {
     hook = await createHook()
     if (hook) webhookUrl = hook.ingest_url
   }
@@ -698,11 +715,56 @@ app.put("/~/public/:slug", async (c) => {
     command: body.command,
     tokenHash,
     webhookUrl,
+    mode: body.mode,
   })
-  const result: any = returnToken ? { ...folder, token: returnToken } : folder
+  const result: any = { ...folder, token }
   if (hook) result.hook = { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token }
-  if (existingMeta) broadcastToRoom(c, slug, { type: "folder:replaced", slug })
-  return c.json(result, existingMeta ? 200 : 201)
+  return c.json(result, 201)
+})
+
+// Destructive full replace — wipes all files, comments, replies and recreates
+app.post("/~/public/:slug/@replace", async (c) => {
+  const slug = c.req.param("slug")
+  const authErr = await requireFolderAuth(c, slug)
+  if (authErr) return authErr
+
+  const body = await c.req.json<{ title?: string; description?: string; command?: string; mode?: string; files: { path: string; content: string }[] }>()
+  if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  if (body.mode) {
+    const modeErr = db.validateMode(body.mode)
+    if (modeErr) return c.json({ error: modeErr }, 400)
+  }
+
+  for (const f of body.files) {
+    const err = db.validatePath(f.path)
+    if (err) return c.json({ error: `Invalid path "${f.path}": ${err}` }, 400)
+  }
+
+  const existing = await db.getFolderTokenHash(c.env.DB, slug)
+  if (!existing) return c.json({ error: "Not found" }, 404)
+
+  // Nuke everything: replies → comments → files → folder
+  await c.env.DB.prepare(`
+    DELETE FROM replies WHERE comment_id IN (
+      SELECT c.id FROM comments c JOIN files f ON c.file_id = f.id WHERE f.folder_id = ?
+    )`).bind(existing.id).run()
+  await c.env.DB.prepare(`
+    DELETE FROM comments WHERE file_id IN (
+      SELECT id FROM files WHERE folder_id = ?
+    )`).bind(existing.id).run()
+  await c.env.DB.prepare("DELETE FROM files WHERE folder_id = ?").bind(existing.id).run()
+  await c.env.DB.prepare("DELETE FROM folders WHERE id = ?").bind(existing.id).run()
+
+  const folder = await db.createFolder(c.env.DB, slug, body.title || "Untitled", body.files, {
+    description: body.description,
+    command: body.command,
+    tokenHash: existing.tokenHash || undefined,
+    mode: body.mode,
+  })
+
+  broadcastToRoom(c, slug, { type: "folder:replaced", slug })
+  return c.json({ id: folder.id, slug }, 200)
 })
 
 app.get("/~/public/:slug", async (c) => {
@@ -860,6 +922,14 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
   const path = c.req.param("path")
   const comment = parseCommentPath(path)
   if (!comment) return c.json({ error: "Not found" }, 404)
+
+  // Check comment permission — token holders always pass, public checks mode
+  if (!await isTokenHolder(c, slug)) {
+    const folder = await db.getFolderTokenHash(c.env.DB, slug)
+    if (!folder) return c.json({ error: "Not found" }, 404)
+    const [, o] = db.parseMode(folder.mode)
+    if (!db.hasPerm(o, db.PERM_COMMENT)) return c.json({ error: "Comments are disabled" }, 403)
+  }
 
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"
 

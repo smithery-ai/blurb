@@ -20,6 +20,8 @@ Create rich markdown artifacts with inline widgets — charts, diagrams, maps, t
 |--------|----------|-------------|
 | POST | `/~/public` | Create a folder with files |
 | GET | `/~/public/:slug` | Get folder with all files + comments |
+| PUT | `/~/public/:slug` | Upsert folder (update metadata + add/update files, preserves unmentioned files) |
+| POST | `/~/public/:slug/@replace` | Destructive full replace (wipes all files, comments, replies) |
 | GET | `/~/public/:slug/:path` | Read a single file |
 | PUT | `/~/public/:slug/:path` | Create or replace a file (upsert) |
 | PATCH | `/~/public/:slug/:path` | Edit file (old_str/new_str diffs) |
@@ -82,6 +84,36 @@ curl -X PATCH https://blurb.md/~/public/:slug/:path \
 ```bash
 curl -X DELETE https://blurb.md/~/public/:slug/:path
 ```
+
+### Permissions (chmod-style)
+
+Folders have a `mode` field — two octal digits (owner, public). Bits: `4=read, 2=comment, 1=write`.
+
+| Mode | Meaning |
+|------|---------|
+| `76` | Default — owner has all, public can read+comment |
+| `74` | Locked — public read-only, no comments |
+| `70` | Private — only token holders can access |
+
+```bash
+# Create a locked folder (no public comments)
+curl -X POST https://blurb.md/~/public \
+  -d '{"mode": "74", "files": [...]}'
+
+# Lock an existing folder
+curl -X PUT https://blurb.md/~/public/:slug \
+  -H "Authorization: Bearer <token>" \
+  -d '{"mode": "74"}'
+```
+
+Token holders always bypass mode restrictions. `ADMIN_TOKEN` is superuser.
+
+### PUT vs @replace
+
+- `PUT /~/public/:slug` — **safe**: upserts files, updates metadata, preserves unmentioned files and comments
+- `POST /~/public/:slug/@replace` — **destructive**: wipes all files, comments, replies and recreates from scratch
+
+Use PUT for incremental updates. Use @replace only when you need a clean slate.
 
 ## Workflow
 
