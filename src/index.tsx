@@ -796,17 +796,18 @@ app.get("/~/public/:slug/:path{.+}", async (c) => {
   }
 
   const cache = "public, s-maxage=60, stale-while-revalidate=300"
-  if (accept.includes("text/markdown")) {
-    return new Response(file.content as string, { headers: { "Content-Type": "text/markdown", "Cache-Control": cache } })
-  }
   if (accept.includes("application/json")) {
     c.header("Cache-Control", cache)
     return c.json(file)
   }
-  // Browser navigating directly to a file — inline full folder data
-  const folder = await db.getFolder(c.env.DB, slug)
-  if (folder) return serveSPAWithData(c, folder)
-  return serveSPA(c)
+  // Browser sends text/html in Accept — serve SPA. Everything else (curl, agents, wget) gets raw content.
+  if (accept.includes("text/html")) {
+    const folder = await db.getFolder(c.env.DB, slug)
+    if (folder) return serveSPAWithData(c, folder)
+    return serveSPA(c)
+  }
+  // Raw content for curl, agents, text/markdown, */*
+  return new Response(file.content as string, { headers: { "Content-Type": "text/markdown; charset=utf-8", "Cache-Control": cache } })
 })
 
 app.put("/~/public/:slug/:path{.+}", async (c) => {
