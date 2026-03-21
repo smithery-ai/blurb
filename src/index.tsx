@@ -1,8 +1,6 @@
 import { Hono } from "hono"
 import { uniqueSlug, anonName } from "./slug"
 import * as db from "./db"
-import { hashStr, renderFernSVG } from "../lib/fern-core"
-import YAML from "yaml"
 
 
 type Bindings = { DB: D1Database; ASSETS: Fetcher; ADMIN_TOKEN?: string; ROOMS: DurableObjectNamespace }
@@ -82,6 +80,40 @@ const app = new Hono<HonoEnv>()
 
 // ─── Helper: serve SPA ─────────────────────────────────────
 
+let cachedHtmlTemplate: string | null = null
+
+// In-memory folder cache (within single Worker instance, 60s TTL)
+const folderCache = new Map<string, { data: any; expiry: number }>()
+
+function getCachedFolder(slug: string): any | null {
+  const entry = folderCache.get(slug)
+  if (!entry) return null
+  if (Date.now() > entry.expiry) {
+    folderCache.delete(slug)
+    return null
+  }
+  return entry.data
+}
+
+function setCachedFolder(slug: string, data: any) {
+  folderCache.set(slug, { data, expiry: Date.now() + 60_000 })
+  // Evict old entries if cache grows too large
+  if (folderCache.size > 100) {
+    const now = Date.now()
+    for (const [k, v] of folderCache) {
+      if (now > v.expiry) folderCache.delete(k)
+    }
+  }
+}
+
+async function getHtmlTemplate(c: any): Promise<string> {
+  if (cachedHtmlTemplate) return cachedHtmlTemplate
+  const url = new URL(c.req.url)
+  const htmlRes = await c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
+  cachedHtmlTemplate = await htmlRes.text()
+  return cachedHtmlTemplate
+}
+
 function serveSPA(c: any) {
   const url = new URL(c.req.url)
   return c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
@@ -94,8 +126,7 @@ function escapeHtml(s: string): string {
 /** Serve SPA with folder data inlined to eliminate client-side JSON fetch */
 async function serveSPAWithData(c: any, data: any) {
   const url = new URL(c.req.url)
-  const htmlRes = await c.env.ASSETS.fetch(new Request(new URL("/index.html", url.origin)))
-  const html = await htmlRes.text()
+  const html = await getHtmlTemplate(c)
   const json = JSON.stringify(data).replace(/</g, "\\u003c")
 
   // OG meta tags for link previews
@@ -142,14 +173,22 @@ function parseCommentPath(raw: string) {
 // Per-folder: /~/public/:slug/.well-known/skills/index.json
 // Also exposed at root for the "blurb" home folder
 
-/** Parse YAML frontmatter name/description from SKILL.md content */
+/** Parse simple YAML frontmatter — extracts name + description without a full YAML parser */
 function parseSkillFrontmatter(content: string): { name: string; description: string } | null {
   const match = content.match(/^---\n([\s\S]*?)\n---/)
   if (!match) return null
   try {
-    const fm = YAML.parse(match[1])
-    if (!fm?.name || !fm?.description) return null
-    return { name: fm.name, description: fm.description }
+    const lines = match[1].split("\n")
+    let name = ""
+    let description = ""
+    for (const line of lines) {
+      const m = line.match(/^(\w+):\s*(.+)$/)
+      if (!m) continue
+      if (m[1] === "name") name = m[2].replace(/^["']|["']$/g, "")
+      if (m[1] === "description") description = m[2].replace(/^["']|["']$/g, "")
+    }
+    if (!name || !description) return null
+    return { name, description }
   } catch {
     return null
   }
@@ -769,7 +808,14 @@ app.post("/~/public/:slug/@replace", async (c) => {
 
 app.get("/~/public/:slug", async (c) => {
   const accept = c.req.header("accept") || ""
-  const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
+  const slug = c.req.param("slug")
+
+  // Try in-memory cache first (skips D1 round-trip)
+  const folder = getCachedFolder(slug) ?? await (async () => {
+    const f = await db.getFolder(c.env.DB, slug)
+    if (f) setCachedFolder(slug, f)
+    return f
+  })()
 
   if (!folder) {
     if (accept.includes("application/json")) return c.json({ error: "Not found" }, 404)
@@ -789,6 +835,7 @@ app.get("/~/public/:slug/og.svg", async (c) => {
   const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
   if (!folder) return c.json({ error: "Not found" }, 404)
 
+  const { hashStr, renderFernSVG } = await import("../lib/fern-core")
   const seed = hashStr(folder.files.map((f: any) => f.path + f.content).join(""))
   const svg = renderFernSVG({
     seed,
@@ -808,6 +855,7 @@ app.get("/~/public/:slug/og.png", async (c) => {
   const folder = await db.getFolder(c.env.DB, c.req.param("slug"))
   if (!folder) return c.json({ error: "Not found" }, 404)
 
+  const { hashStr, renderFernSVG } = await import("../lib/fern-core")
   const seed = hashStr(folder.files.map((f: any) => f.path + f.content).join(""))
   const svg = renderFernSVG({
     seed,
