@@ -39,9 +39,9 @@ const SHAPE_COLORS: Record<ShapeType, Record<string, Record<CellType, string[]>>
       tip:   ["#7aaa6a", "#8aba7a", "#6a9a5a", "#9aca8a"],
     },
     light: {
-      stem:  ["#4a3315", "#3a2305", "#5a4325"],
-      frond: ["#1a5a0a", "#2a6a1a", "#0a4a00", "#1a5510"],
-      tip:   ["#2a7a1a", "#3a8a2a", "#1a6a0a", "#2a7520"],
+      stem:  ["#3a2510", "#2a1800", "#4a3218"],
+      frond: ["#0a4500", "#1a5510", "#004000", "#105008"],
+      tip:   ["#1a6510", "#2a7520", "#0a5500", "#1a6018"],
     },
   },
   leaf: {
@@ -51,9 +51,9 @@ const SHAPE_COLORS: Record<ShapeType, Record<string, Record<CellType, string[]>>
       tip:   ["#aaba5a", "#baca6a", "#9aaa4a", "#cada7a"],
     },
     light: {
-      stem:  ["#5a4010", "#4a3000", "#6a5020"],
-      frond: ["#3a6a00", "#4a7a10", "#2a5a00", "#4a7510"],
-      tip:   ["#5a8a10", "#6a9a20", "#4a7a00", "#5a8520"],
+      stem:  ["#4a3008", "#3a2000", "#5a4018"],
+      frond: ["#2a5500", "#3a6508", "#1a4500", "#3a6008"],
+      tip:   ["#4a7508", "#5a8518", "#3a6500", "#4a7018"],
     },
   },
   twig: {
@@ -63,9 +63,9 @@ const SHAPE_COLORS: Record<ShapeType, Record<string, Record<CellType, string[]>>
       tip:   ["#aa9a8a", "#baaa9a", "#9a8a7a", "#cabaaa"],
     },
     light: {
-      stem:  ["#3a2510", "#2a1500", "#4a3520"],
-      frond: ["#5a4a3a", "#6a5a4a", "#4a3a2a", "#5a4530"],
-      tip:   ["#7a6a5a", "#8a7a6a", "#6a5a4a", "#7a6550"],
+      stem:  ["#2a1808", "#1a0800", "#3a2818"],
+      frond: ["#4a3a28", "#5a4a38", "#3a2a18", "#4a3520"],
+      tip:   ["#6a5a48", "#7a6a58", "#5a4a38", "#6a5540"],
     },
   },
 }
