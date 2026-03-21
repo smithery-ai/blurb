@@ -249,12 +249,13 @@ html, body, #root {
 .fern-codeblock {
   margin-top: 16px;
   padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: var(--widget-bg);
+  border: 1px solid var(--widget-border);
   border-radius: 6px;
   font-family: "SF Mono", "Menlo", "Consolas", monospace;
   font-size: 13px;
-  color: rgba(255, 255, 255, 0.5);
+  color: var(--editor-fg);
+  opacity: 0.7;
   width: fit-content;
   cursor: pointer;
   display: flex;
@@ -264,8 +265,8 @@ html, body, #root {
 }
 
 .fern-codeblock:hover {
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.08);
+  opacity: 1;
+  border-color: var(--accent);
 }
 
 .fern-cb-clicked {
@@ -284,7 +285,7 @@ html, body, #root {
 }
 
 .fern-cb-arg {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--editor-fg);
 }
 
 .fern-cb-copy {
@@ -292,7 +293,7 @@ html, body, #root {
   align-items: center;
   opacity: 0.4;
   transition: opacity 0.15s cubic-bezier(0.16, 1, 0.3, 1);
-  color: rgba(255, 255, 255, 0.4);
+  color: var(--editor-fg);
 }
 
 .fern-cb-copy svg {
