@@ -138,6 +138,13 @@ html, body, #root {
   margin: 0 5px;
 }
 
+.breadcrumb-mode {
+  margin-left: 6px;
+  opacity: 0.5;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
 .header-spacer {
   flex: 1;
 }
