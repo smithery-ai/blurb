@@ -11,6 +11,7 @@ const token = process.argv[3] || "dev-admin-token"
 
 const skill = readFileSync(join(root, ".claude/skills/blurb/SKILL.md"), "utf-8")
 const widgetSpec = readFileSync(join(root, ".claude/skills/blurb/references/widget-spec.md"), "utf-8")
+const hookListen = readFileSync(join(root, ".claude/skills/blurb/scripts/hook-listen.ts"), "utf-8")
 
 const readme = `# Blurb
 
@@ -101,8 +102,14 @@ const body = {
   command: "npx skills add https://blurb.md",
   files: [
     { path: "README.md", content: readme },
+    // .claude/skills/blurb
     { path: ".claude/skills/blurb/SKILL.md", content: skill },
     { path: ".claude/skills/blurb/references/widget-spec.md", content: widgetSpec },
+    { path: ".claude/skills/blurb/scripts/hook-listen.ts", content: hookListen },
+    // .agents mirror
+    { path: ".agents/skills/blurb/SKILL.md", content: skill },
+    { path: ".agents/skills/blurb/references/widget-spec.md", content: widgetSpec },
+    { path: ".agents/skills/blurb/scripts/hook-listen.ts", content: hookListen },
   ],
 }
 
