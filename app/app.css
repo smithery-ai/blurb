@@ -142,7 +142,7 @@ html, body, #root {
   margin-left: 6px;
   opacity: 0.5;
   display: inline-flex;
-  vertical-align: middle;
+  vertical-align: -1px;
 }
 
 .header-spacer {
