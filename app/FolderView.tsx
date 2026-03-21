@@ -196,10 +196,10 @@ export default function FolderView({ slug, initialFile }: { slug: string; initia
       root.style.setProperty("--widget-border", "#333")
       root.style.setProperty("--sidebar-bg", "#1a1816")
     } else {
-      root.style.setProperty("--editor-bg", "#ffffff")
+      root.style.setProperty("--editor-bg", "#faf8f5")
       root.style.setProperty("--editor-fg", "#37352f")
-      root.style.setProperty("--widget-border", "#e3e2de")
-      root.style.setProperty("--sidebar-bg", "#fbfbfa")
+      root.style.setProperty("--widget-border", "#e0ddd6")
+      root.style.setProperty("--sidebar-bg", "#f5f3ef")
     }
     root.style.background = root.style.getPropertyValue("--editor-bg")
     root.style.color = root.style.getPropertyValue("--editor-fg")
