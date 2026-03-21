@@ -191,11 +191,11 @@ MapLibre GL vector maps with markers. Dark Matter (dark) / Voyager (light) tiles
 
 ````markdown
 ```map
-{"zoom":4,"center":[20,110],"markers":[{"location":[1.35,103.82],"label":"Singapore"},{"location":[39.90,116.41],"label":"Beijing"}]}
+{"zoom":4,"center":[20,110],"markers":[{"location":[1.35,103.82],"label":"Singapore"},{"location":[39.90,116.41],"label":"Beijing"}],"paths":[{"coordinates":[[1.35,103.82],[39.90,116.41]],"color":"#6a8ac0","width":2}]}
 ```
 ````
 
-Spec: `center` is `[lat, lng]`, `markers[].location` is `[lat, lng]`. Set `controls: true` to show zoom buttons.
+Spec: `center` is `[lat, lng]`, `markers[].location` is `[lat, lng]`. `paths[].coordinates` is an array of `[lat, lng]` points. Path options: `color`, `width`, `dashed`. Set `controls: true` to show zoom buttons. Omit `center` to auto-fit.
 
 ### Timeline (`timeline` code block)
 
