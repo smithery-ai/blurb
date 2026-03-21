@@ -1,20 +1,15 @@
 /**
  * Shared test setup: creates a Miniflare instance with D1,
- * applies migrations, and provides a helper to make requests
- * against the Hono app with real D1 bindings.
+ * applies migrations from the migrations/ directory automatically,
+ * and provides a helper to make requests against the Hono app.
  */
 import { Miniflare } from "miniflare"
+import { readdir, readFile } from "fs/promises"
+import { join } from "path"
 import app from "../index"
 
 let mf: Miniflare
 let db: D1Database
-
-const TABLES = [
-  `CREATE TABLE IF NOT EXISTS folders (id TEXT PRIMARY KEY, slug TEXT UNIQUE NOT NULL, title TEXT, description TEXT, command TEXT, webhook_url TEXT, token_hash TEXT, mode TEXT NOT NULL DEFAULT '76' CHECK (mode GLOB '[0-7][0-7]'), created_at TEXT DEFAULT (datetime('now')))`,
-  `CREATE TABLE IF NOT EXISTS files (id TEXT PRIMARY KEY, folder_id TEXT NOT NULL REFERENCES folders(id), path TEXT NOT NULL, content TEXT NOT NULL, language TEXT, sort_order INTEGER DEFAULT 0, created_at TEXT DEFAULT (datetime('now')))`,
-  `CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, file_id TEXT NOT NULL REFERENCES files(id), anchor_json TEXT NOT NULL, body TEXT NOT NULL, author TEXT DEFAULT 'Anonymous', created_at TEXT DEFAULT (datetime('now')))`,
-  `CREATE TABLE IF NOT EXISTS replies (id TEXT PRIMARY KEY, comment_id TEXT NOT NULL REFERENCES comments(id), body TEXT NOT NULL, author TEXT DEFAULT 'Anonymous', created_at TEXT DEFAULT (datetime('now')))`,
-]
 
 export const TEST_ADMIN_TOKEN = "test-admin-token"
 
@@ -25,7 +20,23 @@ export async function setupTestEnv() {
     d1Databases: { DB: "test-db" },
   })
   db = await mf.getD1Database("DB")
-  for (const sql of TABLES) await db.exec(sql)
+
+  // Auto-apply all migration files in order
+  const migrationsDir = join(__dirname, "../../migrations")
+  const files = await readdir(migrationsDir)
+  const sqlFiles = files.filter(f => f.endsWith(".sql")).sort()
+  for (const file of sqlFiles) {
+    const raw = await readFile(join(migrationsDir, file), "utf-8")
+    // Strip comments, collapse whitespace, split on semicolons outside parens
+    const clean = raw.replace(/--[^\n]*/g, "").replace(/\s+/g, " ").trim()
+    // Split carefully: only on semicolons that are followed by a space + keyword or end
+    const stmts = clean.split(/;\s*(?=(?:CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|$))/i)
+      .map(s => s.trim()).filter(Boolean)
+    for (const stmt of stmts) {
+      await db.prepare(stmt).run()
+    }
+  }
+
   return { db, mf }
 }
 
