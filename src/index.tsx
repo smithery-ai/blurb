@@ -517,6 +517,18 @@ function generateToken(): string {
   return [...bytes].map(b => b.toString(16).padStart(2, "0")).join("")
 }
 
+/** Check if caller is a token holder (owner or admin). Returns true if authorized. */
+async function isTokenHolder(c: any, slug: string): Promise<boolean> {
+  const auth = c.req.header("authorization") || ""
+  const bearer = auth.startsWith("Bearer ") ? auth.slice(7) : ""
+  if (!bearer) return false
+  if (c.env.ADMIN_TOKEN && bearer === c.env.ADMIN_TOKEN) return true
+  const folder = await db.getFolderTokenHash(c.env.DB, slug)
+  if (!folder?.tokenHash) return false
+  const hash = await hashToken(bearer)
+  return hash === folder.tokenHash
+}
+
 /** Check Authorization header against folder's token_hash or ADMIN_TOKEN. Returns error response or null if authorized. */
 async function requireFolderAuth(c: any, slug: string): Promise<Response | null> {
   const auth = c.req.header("authorization") || ""
@@ -570,10 +582,16 @@ app.post("/~/public", async (c) => {
     command?: string
     token?: string
     webhook_url?: string
+    mode?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  if (body.mode) {
+    const modeErr = db.validateMode(body.mode)
+    if (modeErr) return c.json({ error: modeErr }, 400)
+  }
 
   const landingErr = db.validateLanding(body.description, body.command)
   if (landingErr) return c.json({ error: landingErr }, 400)
@@ -603,6 +621,7 @@ app.post("/~/public", async (c) => {
     command: body.command,
     tokenHash,
     webhookUrl,
+    mode: body.mode,
   })
   const url = new URL(c.req.url)
   const base = url.origin
@@ -639,10 +658,16 @@ app.put("/~/public/:slug", async (c) => {
     command?: string
     token?: string
     webhook_url?: string
+    mode?: string
     files: { path: string; content: string }[]
   }>()
 
   if (!body.files?.length) return c.json({ error: "At least one file required" }, 400)
+
+  if (body.mode) {
+    const modeErr = db.validateMode(body.mode)
+    if (modeErr) return c.json({ error: modeErr }, 400)
+  }
 
   const landingErr = db.validateLanding(body.description, body.command)
   if (landingErr) return c.json({ error: landingErr }, 400)
@@ -698,6 +723,7 @@ app.put("/~/public/:slug", async (c) => {
     command: body.command,
     tokenHash,
     webhookUrl,
+    mode: body.mode,
   })
   const result: any = returnToken ? { ...folder, token: returnToken } : folder
   if (hook) result.hook = { hook_id: hook.hook_id, ingest_url: hook.ingest_url, manage_url: hook.manage_url, manage_token: hook.manage_token }
@@ -860,6 +886,14 @@ app.post("/~/public/:slug/:path{.+}", async (c) => {
   const path = c.req.param("path")
   const comment = parseCommentPath(path)
   if (!comment) return c.json({ error: "Not found" }, 404)
+
+  // Check comment permission — token holders always pass, public checks mode
+  if (!await isTokenHolder(c, slug)) {
+    const folder = await db.getFolderTokenHash(c.env.DB, slug)
+    if (!folder) return c.json({ error: "Not found" }, 404)
+    const [, o] = db.parseMode(folder.mode)
+    if (!db.hasPerm(o, db.PERM_COMMENT)) return c.json({ error: "Comments are disabled" }, 403)
+  }
 
   const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown"
 

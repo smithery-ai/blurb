@@ -4,6 +4,31 @@ function id(): string {
   return crypto.randomUUID()
 }
 
+// ─── Permission mode (chmod-style) ──────────────────────────
+
+export const PERM_READ    = 4
+export const PERM_COMMENT = 2
+export const PERM_WRITE   = 1
+
+/** Check if a mode digit includes a permission bit */
+export function hasPerm(digit: number, bit: number): boolean {
+  return (digit & bit) !== 0
+}
+
+/** Parse mode string into [owner, public] digits */
+export function parseMode(mode: string): [number, number] {
+  return [parseInt(mode[0], 8), parseInt(mode[1], 8)]
+}
+
+/** Validate a mode string — must be two octal digits */
+export function validateMode(mode: string): string | null {
+  if (!/^[0-7]{2}$/.test(mode)) return "mode must be two octal digits (e.g. '76')"
+  const [, o] = parseMode(mode)
+  if (hasPerm(o, PERM_COMMENT) && !hasPerm(o, PERM_READ)) return "public cannot comment without read"
+  if (hasPerm(o, PERM_WRITE)) return "public write is not supported"
+  return null
+}
+
 // ─── Path validation ────────────────────────────────────────
 
 const PATH_RE = /^[a-zA-Z0-9_\-\.\/]+$/
@@ -35,7 +60,7 @@ export async function getFolder(db: DB, slug: string) {
   // Single query: JOIN folders → files → comments → replies
   const rows = await db.prepare(`
     SELECT
-      fo.id as folder_id, fo.slug, fo.title, fo.description as folder_description, fo.command as folder_command, fo.created_at as folder_created_at,
+      fo.id as folder_id, fo.slug, fo.title, fo.description as folder_description, fo.command as folder_command, fo.mode as folder_mode, fo.created_at as folder_created_at,
       f.id as file_id, f.path, f.content, f.language, f.sort_order,
       c.id as comment_id, c.anchor_json, c.body as comment_body, c.author as comment_author, c.created_at as comment_created_at,
       r.id as reply_id, r.body as reply_body, r.author as reply_author, r.created_at as reply_created_at
@@ -112,6 +137,7 @@ export async function getFolder(db: DB, slug: string) {
     title: first.title,
     description: first.folder_description || undefined,
     command: first.folder_command || undefined,
+    mode: first.folder_mode || "76",
     createdAt: first.folder_created_at,
     files: enrichedFiles,
   }
@@ -126,9 +152,9 @@ export function validateLanding(description?: string, command?: string): string 
   return null
 }
 
-export async function getFolderTokenHash(db: DB, slug: string): Promise<{ id: string; tokenHash: string | null } | null> {
-  const row = await db.prepare("SELECT id, token_hash FROM folders WHERE slug = ?").bind(slug).first() as any
-  return row ? { id: row.id, tokenHash: row.token_hash } : null
+export async function getFolderTokenHash(db: DB, slug: string): Promise<{ id: string; tokenHash: string | null; mode: string } | null> {
+  const row = await db.prepare("SELECT id, token_hash, mode FROM folders WHERE slug = ?").bind(slug).first() as any
+  return row ? { id: row.id, tokenHash: row.token_hash, mode: row.mode || "76" } : null
 }
 
 export async function createFolder(
@@ -136,13 +162,13 @@ export async function createFolder(
   slug: string,
   title: string,
   files: { path: string; content: string }[],
-  opts?: { description?: string; command?: string; tokenHash?: string; webhookUrl?: string },
+  opts?: { description?: string; command?: string; tokenHash?: string; webhookUrl?: string; mode?: string },
 ) {
   const folderId = id()
 
   const stmts = [
-    db.prepare("INSERT INTO folders (id, slug, title, description, command, token_hash, webhook_url) VALUES (?, ?, ?, ?, ?, ?, ?)")
-      .bind(folderId, slug, title, opts?.description || null, opts?.command || null, opts?.tokenHash || null, opts?.webhookUrl || null),
+    db.prepare("INSERT INTO folders (id, slug, title, description, command, token_hash, webhook_url, mode) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+      .bind(folderId, slug, title, opts?.description || null, opts?.command || null, opts?.tokenHash || null, opts?.webhookUrl || null, opts?.mode || "76"),
     ...files.map((f, i) =>
       db.prepare(
         "INSERT INTO files (id, folder_id, path, content, sort_order) VALUES (?, ?, ?, ?, ?)"
