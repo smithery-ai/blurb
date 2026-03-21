@@ -10,7 +10,7 @@ description: >
 
 # Create Blurb
 
-Create rich markdown artifacts with inline widgets — charts, diagrams, maps, timelines, calendars, tables, math, embeds, sketches — published as shareable URLs.
+Create rich markdown artifacts with inline widgets — charts, Mermaid diagrams, maps, timelines, calendars, tables, math, embeds, sketches — published as shareable URLs.
 
 ## API
 
@@ -229,45 +229,6 @@ https://www.youtube.com/watch?v=dQw4w9WgXcQ
 ```
 ````
 
-### Diffs (`diff` code block)
-
-Syntax-highlighted code diffs.
-
-````markdown
-```diff
-{"language":"typescript","filename":"api.ts","old":"const x = 1","new":"const x = 2"}
-```
-````
-
-### HTML (`html` code block)
-
-Render custom HTML/CSS/SVG directly — no iframe, no predefined structure. DOMPurify strips scripts and event handlers; `<style>` blocks are auto-scoped to the widget so CSS doesn't leak.
-
-````markdown
-```html
-<style>
-  .metric-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .metric-card { padding: 16px; border-radius: 8px; background: rgba(193, 95, 60, 0.08); border: 1px solid rgba(193, 95, 60, 0.15); }
-  .metric-value { font-size: 1.8em; font-weight: 700; color: #C15F3C; }
-  .metric-label { font-size: 0.85em; opacity: 0.6; margin-top: 4px; }
-</style>
-<div class="metric-grid">
-  <div class="metric-card">
-    <div class="metric-value">12.4k</div>
-    <div class="metric-label">Monthly Active Users</div>
-  </div>
-  <div class="metric-card">
-    <div class="metric-value">98.2%</div>
-    <div class="metric-label">Uptime</div>
-  </div>
-</div>
-```
-````
-
-Good for: custom layouts, inline SVG, styled cards, anything the predefined widgets don't cover. No JavaScript — use the `html-app` widget (sandboxed iframe) if you need interactivity.
-
-Forbidden tags: `script`, `iframe`, `object`, `embed`, `form`, `input`, `textarea`, `button`, `select`.
-
 ### Sketches (`sketch` code block)
 
 Hand-drawn diagrams via Rough.js. Elements: `rect`, `ellipse`, `line`, `arrow`, `text`.
@@ -275,16 +236,6 @@ Hand-drawn diagrams via Rough.js. Elements: `rect`, `ellipse`, `line`, `arrow`, 
 ````markdown
 ```sketch
 {"width":500,"height":200,"elements":[{"type":"rect","x":30,"y":60,"width":130,"height":70,"fill":"#a5d8ff","color":"#1971c2","label":"Client"},{"type":"arrow","x1":160,"y1":95,"x2":280,"y2":95,"color":"#868e96","label":"REST"},{"type":"rect","x":280,"y":60,"width":130,"height":70,"fill":"#b2f2bb","color":"#2f9e44","label":"API"}]}
-```
-````
-
-### Globe (`globe` code block)
-
-Interactive WebGL globe with markers (COBE).
-
-````markdown
-```globe
-{"markers":[{"location":[37.77,-122.42],"size":0.1},{"location":[51.51,-0.13],"size":0.08}]}
 ```
 ````
 
@@ -386,7 +337,7 @@ curl -X POST https://blurb.md/~/public \
 - Multi-file artifacts show a collapsible tree sidebar
 - Keep `widgetId` unique within a document (for chart widgets)
 - Colors auto-assign from the engei palette — only specify when needed
-- **All widgets have their own code block lang**: `chart`, `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`, `globe`, `diff`, `html`. Prefer the named lang — it auto-injects `widgetId` and `type`. The generic `` ```widget `` block also works for any widget but requires explicit `"widgetId"` and `"type"` in the JSON
+- **All widgets have their own code block lang**: `chart`, `mermaid`, `math`, `table`, `map`, `timeline`, `calendar`, `embed`, `sketch`. Prefer the named lang — it auto-injects `widgetId` and `type`. The generic `` ```widget `` block also works for any widget but requires explicit `"widgetId"` and `"type"` in the JSON
 - **Pie/doughnut charts need explicit `backgroundColor`** on datasets or all slices render the same color
 - **Map `center` is respected** — if you set `center` and `zoom`, the map won't auto-fit to markers. Omit `center` to auto-fit
 - **Mermaid gotchas**: No backticks in labels, no special chars (`→`) in messages, no curly braces `{}` in message labels (breaks v11 parser), use `#quot;` for quotes
